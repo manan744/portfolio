@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EKS Fleet Upgrades — Manan Jain</title>
+<meta name="description" content="Case study: a 4-phase orchestrator upgrading a 150+ cluster EKS fleet — concurrent, idempotent, with automated validation.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="EKS Fleet Upgrades — Manan Jain">
+<meta property="og:description" content="Case study: a 4-phase orchestrator upgrading a 150+ cluster EKS fleet — concurrent, idempotent, with automated validation.">
+<meta property="og:url" content="https://manan.info/work/eks-fleet-upgrades.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="EKS Fleet Upgrades — Manan Jain">
+<meta name="twitter:description" content="Case study: a 4-phase orchestrator upgrading a 150+ cluster EKS fleet — concurrent, idempotent, with automated validation.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../work.html">work</a> / eks-fleet-upgrades</span>
+    <h1>Upgrading a 150+ cluster EKS fleet<span class="accent">_</span></h1>
+    <p class="lede">An EKS version upgrade is a multi-step, order-sensitive operation with real
+    failure modes. Now do it for a fleet of 150+ clusters across many AWS accounts —
+    every quarter. This orchestrator makes that a supervised batch job instead of a
+    months-long manual campaign.</p>
+    <dl class="kv">
+      <dt>role</dt><dd>designer &amp; author</dd>
+      <dt>scale</dt><dd>150+ EKS clusters · ~1,000 nodes · 30K+ pods · cross-account</dd>
+      <dt>stack</dt><dd>Python, boto3, Kubernetes client, SAML/STS cross-account auth, ThreadPoolExecutor</dd>
+    </dl>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="case-section reveal">
+    <h2>the problem</h2>
+    <p>EKS versions expire. Miss the window and AWS force-upgrades you — on its schedule, not yours.
+    A manual cluster upgrade (control plane → node groups → addons → validation) takes an engineer
+    the better part of a day. Multiply by hundreds of clusters and the math simply doesn't work:
+    the fleet would never be current.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the approach</h2>
+    <p>A four-phase pipeline, where each phase runs concurrently across clusters and no phase
+    starts until the previous one is verified:</p>
+<pre class="ascii">
+ <span class="g">phase 1</span>          <span class="g">phase 2</span>          <span class="g">phase 3</span>          <span class="g">phase 4</span>
+ ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────────┐
+ │ control  │ ──► │ managed  │ ──► │ addons   │ ──► │ sanity check │
+ │ plane    │     │ node     │     │ (vpc-cni,│     │ nodes/pods/  │
+ │ upgrade  │     │ groups   │     │ coredns, │     │ CRDs/addons  │
+ └──────────┘     └──────────┘     │ k-proxy) │     └──────────────┘
+      ▲                            └──────────┘            │
+      │            <span class="c">SAML auth ► STS assume-role</span>            ▼
+ ┌─────────────┐   <span class="c">per target account</span>          ┌──────────────────┐
+ │ accounts.csv│                                │ report.csv       │
+ │ fleet targets│                                │ <span class="a">pass / fail / why</span>│
+ └─────────────┘                                └──────────────────┘
+</pre>
+    <p>The final phase is its own tool — a post-upgrade validation framework that checks node
+    readiness, workload health, addon versions, and CRD integrity using the native Kubernetes
+    Python client, so "upgrade done" means <strong>verified</strong>, not hoped.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>engineering details</h2>
+    <p><strong>Cross-account by design.</strong> SAML-federated auth mints STS credentials per
+    target account — no long-lived keys, no manual role switching across accounts.</p>
+    <p><strong>Thread-safe concurrency.</strong> Clusters upgrade in parallel with bounded worker
+    pools and thread-safe result collection, so one slow cluster doesn't stall the fleet and one
+    failed cluster doesn't corrupt the report.</p>
+    <p><strong>Resumable &amp; idempotent.</strong> Already-current clusters are detected and skipped;
+    a re-run after a partial failure picks up exactly where it left off.</p>
+    <p><strong>Companion tooling.</strong> Separate utilities handle addon-only updates and
+    fleet-wide health snapshots, so routine maintenance doesn't require the full orchestrator.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>from the code</h2>
+    <p>Two details separate this from an upgrade script. First, the <strong>two-phase waiter</strong>:
+    <span class="mono accent">update_cluster_version</span> is async and the cluster reports
+    <span class="mono accent">ACTIVE</span> at the old version for a while after the call — so the
+    waiter first waits for the cluster to <em>leave</em> ACTIVE, then for ACTIVE at the target
+    version. Without that, a naive poller declares success before the upgrade begins.</p>
+    <p>Second, <strong>attach-don't-fail</strong>: a re-run that finds a cluster mid-upgrade from a
+    previous partial run attaches to the in-flight update and waits, instead of erroring. Combined
+    with per-phase timeouts, a <span class="mono accent">--dry-run</span> mode, and version
+    comparison that skips current clusters, re-running the orchestrator is always safe:</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">python · the resumability contract</span><button class="code-copy">copy</button></div>
+<pre><span class="c-com"># upgrade_control_plane.py — if mid-upgrade from a previous run, wait instead of failing</span>
+<span class="c-kw">if</span> cluster_status == <span class="c-str">"UPDATING"</span>:
+    wait_for_cluster_active(eks, cluster_name, target_version, cp_timeout)
+
+<span class="c-com"># helpers.py — semantic version compare decides skip-vs-upgrade</span>
+<span class="c-kw">if not</span> version_lt(current_version, target_version):
+    write_result({<span class="c-str">"cluster"</span>: name, <span class="c-str">"status"</span>: <span class="c-str">"SKIPPED"</span>, <span class="c-str">"reason"</span>: <span class="c-str">"already current"</span>})
+    <span class="c-kw">return</span></pre></div>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>impact</h2>
+    <p>Fleet-wide upgrades became a <strong>scheduled, supervised batch operation</strong> with a
+    CSV audit trail per run — instead of a quarter-long engineering campaign. Clusters stay inside
+    the EKS support window, and validation is automatic rather than tribal knowledge.</p>
+    <div class="tags">
+      <span class="tag">Python</span><span class="tag cy">EKS</span><span class="tag cy">boto3</span>
+      <span class="tag cy">SAML/STS</span><span class="tag am">ThreadPoolExecutor</span><span class="tag am">Idempotency</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="ecs-cicd-module.html">← prev: ECS platform module</a>
+    <a class="btn" href="gitops-addon-platform.html">next: GitOps addon platform →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

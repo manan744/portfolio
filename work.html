@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Work — Manan Jain</title>
+<meta name="description" content="Case studies: fleet-scale Kubernetes automation, Terraform platform modules, GitOps, and CI/CD engineering by Manan Jain.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="Work — Manan Jain">
+<meta property="og:description" content="Case studies: fleet-scale Kubernetes automation, Terraform platform modules, GitOps, and CI/CD engineering by Manan Jain.">
+<meta property="og:url" content="https://manan.info/work.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Work — Manan Jain">
+<meta name="twitter:description" content="Case studies: fleet-scale Kubernetes automation, Terraform platform modules, GitOps, and CI/CD engineering by Manan Jain.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="index.html">~</a> / work</span>
+    <span class="eyebrow">$ kubectl get projects -A -o case-study</span>
+    <h1>Systems, not scripts<span class="accent">_</span></h1>
+    <p class="lede">Nine deep dives. Each one started as a real problem — usually one that dozens
+    of teams or a hundred clusters had at the same time — and ended as a system that solved it
+    without a human in the loop.</p>
+  </div>
+</header>
+
+<section class="section" style="padding-top:16px">
+  <div class="wrap">
+    <div class="filter-tabs" data-filter-tabs>
+      <button data-f="all" class="on">all<span class="n">9</span></button>
+      <button data-f="ai-infra">gpu / ai infra<span class="n">2</span></button>
+      <button data-f="platform">platform<span class="n">3</span></button>
+      <button data-f="fleet-ops">fleet ops<span class="n">2</span></button>
+      <button data-f="observability">observability<span class="n">2</span></button>
+    </div>
+    <div class="grid grid-2">
+
+      <a class="card reveal" href="work/gpu-llm-platform.html" data-cat="ai-infra" style="border-color:rgba(50,108,229,.35)">
+        <span class="arrow">↗</span>
+        <span class="file">00 · kubernetes · gpu · flagship</span>
+        <h3>LLM Inference Platform on 500+ Spot GPUs</h3>
+        <p>A Kubernetes platform that runs large-scale LLM batch inference on interruptible GPU
+        capacity. Custom scheduling policies, checkpoint/retry fault tolerance, and Karpenter
+        elasticity treat Spot reclaims as normal events — sustaining ~80% utilization across
+        500+ GPUs while cutting compute cost by ~60%.</p>
+        <div class="metric-line">▲ ~80% GPU utilization · ~60% compute cost reduction</div>
+        <div class="tags"><span class="tag k8">EKS</span><span class="tag">GPU infra</span><span class="tag cy">Karpenter</span><span class="tag am">LLM inference</span></div>
+      </a>
+
+      <a class="card reveal" href="work/ecs-cicd-module.html" data-cat="platform">
+        <span class="arrow">↗</span>
+        <span class="file">01 · terraform · platform</span>
+        <h3>ECS Multi-Service CI/CD Platform Module</h3>
+        <p>One Terraform module that provisions a complete microservice platform: shared ECS cluster,
+        ALB host/path routing, blue/green external services, service-discovery internal services,
+        and an independent CodePipeline per microservice. Teams write ~50 lines of HCL and get
+        zero-downtime deploys, automatic rollbacks, and a versioned, audited foundation.</p>
+        <div class="metric-line">▲ weeks of bespoke Terraform → under an hour</div>
+        <div class="tags"><span class="tag">Terraform</span><span class="tag cy">ECS Fargate</span><span class="tag cy">CodeDeploy</span><span class="tag am">Blue/Green</span></div>
+      </a>
+
+      <a class="card reveal d1" href="work/eks-fleet-upgrades.html" data-cat="fleet-ops">
+        <span class="arrow">↗</span>
+        <span class="file">02 · python · fleet-scale</span>
+        <h3>EKS Fleet Upgrade Orchestrator</h3>
+        <p>Kubernetes upgrades are scary on one cluster. This is a 4-phase orchestrator that does them
+        across a 150+ cluster fleet: control plane, node groups, addons, then automated sanity checks —
+        concurrent, cross-account via SAML/STS, resumable after partial failure, with a CSV audit
+        trail for every run.</p>
+        <div class="metric-line">▲ quarter-long manual campaign → supervised batch job</div>
+        <div class="tags"><span class="tag">Python</span><span class="tag cy">EKS</span><span class="tag cy">SAML/STS</span><span class="tag am">Concurrency</span></div>
+      </a>
+
+      <a class="card reveal" href="work/gitops-addon-platform.html" data-cat="platform">
+        <span class="arrow">↗</span>
+        <span class="file">03 · argocd · platform</span>
+        <h3>GitOps Addon Delivery Platform</h3>
+        <p>An ArgoCD app-of-apps framework where ApplicationSets discover clusters by label and a
+        per-cluster Git inventory decides which addons each cluster gets — external-secrets, Traefik,
+        OTEL collectors, security agents. Enabling an addon on any cluster in the fleet is a one-line
+        Git commit; drift self-heals.</p>
+        <div class="metric-line">▲ per-cluster manual installs → one commit, fleet-wide</div>
+        <div class="tags"><span class="tag">ArgoCD</span><span class="tag cy">ApplicationSets</span><span class="tag cy">Helm</span><span class="tag am">GitOps</span></div>
+      </a>
+
+      <a class="card reveal d1" href="work/fleet-observability.html" data-cat="observability">
+        <span class="arrow">↗</span>
+        <span class="file">04 · python · async</span>
+        <h3>Fleet Health &amp; Observability Suite</h3>
+        <p>Three tools, one goal: know the state of everything. Concurrent health polling of hundreds
+        of clusters, async endpoint checks for thousands of services with aiohttp + Prometheus
+        metrics, and post-change validation that catches regressions before users do.</p>
+        <div class="metric-line">▲ "is the fleet ok?" → definitive answer in minutes</div>
+        <div class="tags"><span class="tag">asyncio</span><span class="tag cy">Prometheus</span><span class="tag cy">K8s API</span><span class="tag am">Monitoring</span></div>
+      </a>
+
+      <a class="card reveal" href="work/bulk-cicd-modernization.html" data-cat="fleet-ops">
+        <span class="arrow">↗</span>
+        <span class="file">05 · python · multi-account</span>
+        <h3>Bulk CI/CD Modernization at Scale</h3>
+        <p>500+ CI/CD pipelines across the fleet needed the same upgrade. Instead of hundreds of
+        tickets: a ServiceCatalog-driven engine that discovers, upgrades, and verifies every
+        pipeline — idempotent, multi-region, ring-based rollout, with CSV audit trails per account.</p>
+        <div class="metric-line">▲ 500+ pipelines patched in parallel, 100% coverage</div>
+        <div class="tags"><span class="tag">boto3</span><span class="tag cy">ServiceCatalog</span><span class="tag cy">CodePipeline</span><span class="tag am">Idempotent</span></div>
+      </a>
+
+
+      <a class="card reveal d1" href="work/onboarding-multitenancy.html" data-cat="platform">
+        <span class="arrow">↗</span>
+        <span class="file">06 · node/react · self-service</span>
+        <h3>Self-Service Onboarding &amp; Multi-Tenancy</h3>
+        <p>A platform-team-in-a-box: REST API + React UI that takes a team from "we need infra" to
+        onboarded — generating convention-correct Terraform, automating Git PRs, wiring
+        notifications. Plus containerized multi-tenant app patterns with Node and Flask.</p>
+        <div class="metric-line">▲ engineer-hours per team → a form and a PR review</div>
+        <div class="tags"><span class="tag">Node.js</span><span class="tag cy">React</span><span class="tag cy">Terraform</span><span class="tag am">Automation</span></div>
+      </a>
+
+      <a class="card reveal" href="work/k8s-agent.html" data-cat="ai-infra">
+        <span class="arrow">↗</span>
+        <span class="file">07 · python · ai agent</span>
+        <h3>k8sAgent — Agentic SRE Copilot</h3>
+        <p>An agent designed like an SRE works: plan the investigation, fan out MCP tools in
+        parallel, critique its own conclusion against live cluster state, and answer only when
+        evidence converges. Langfuse-traced and eval-gated, RBAC-scoped reads, writes as GitOps
+        PRs behind human approval.</p>
+        <div class="metric-line">▲ evidence-cited answers · bounded loop · groundedness-scored</div>
+        <div class="tags"><span class="tag k8">Kubernetes</span><span class="tag">Agentic AI</span><span class="tag cy">MCP</span><span class="tag cy">Langfuse</span><span class="tag am">GitOps writes</span></div>
+      </a>
+
+      <a class="card reveal d1" href="work/k8lens.html" data-cat="observability">
+        <span class="arrow">↗</span>
+        <span class="file">08 · python · in-cluster monitor</span>
+        <h3>k8lens — In-Cluster Health Radar</h3>
+        <p>A Helm-deployed monitor that discovers every ingress and service in its cluster and
+        probes them concurrently with asyncio + aiohttp — because "Running" doesn't mean "up."
+        Results export as Prometheus metrics; part of the platform behind 2,500+ monitored
+        endpoints.</p>
+        <div class="metric-line">▲ full-cluster HTTP sweep → seconds, every minute</div>
+        <div class="tags"><span class="tag k8">Kubernetes</span><span class="tag cy">asyncio</span><span class="tag cy">Prometheus</span><span class="tag am">Helm</span></div>
+      </a>
+
+
+    </div>
+
+    <div class="card reveal" style="margin-top:44px; text-align:center; padding:44px 32px">
+      <h3 style="font-size:22px">Want the full story behind any of these?</h3>
+      <p style="max-width:480px; margin:10px auto 24px">Each links to a deep dive — or I'm happy to
+      walk through architecture decisions live.</p>
+      <div style="display:flex; gap:14px; justify-content:center; flex-wrap:wrap">
+        <a class="btn solid" href="mailto:jainmanan1804@gmail.com">email me →</a>
+        <a class="btn" href="https://www.linkedin.com/in/manan-jain-91616a184/" target="_blank" rel="noopener">connect on LinkedIn</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<script src="assets/main.js"></script>
+</body>
+</html>

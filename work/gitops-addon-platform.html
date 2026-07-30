@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitOps Addon Delivery Platform — Manan Jain</title>
+<meta name="description" content="Case study: ArgoCD ApplicationSets + per-cluster Git inventory delivering addons to 150+ clusters with one-line commits.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="GitOps Addon Delivery Platform — Manan Jain">
+<meta property="og:description" content="Case study: ArgoCD ApplicationSets + per-cluster Git inventory delivering addons to 150+ clusters with one-line commits.">
+<meta property="og:url" content="https://manan.info/work/gitops-addon-platform.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="GitOps Addon Delivery Platform — Manan Jain">
+<meta name="twitter:description" content="Case study: ArgoCD ApplicationSets + per-cluster Git inventory delivering addons to 150+ clusters with one-line commits.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../work.html">work</a> / gitops-addon-platform</span>
+    <h1>GitOps addon delivery for every cluster<span class="accent">_</span></h1>
+    <p class="lede">Every Kubernetes cluster needs the same platform addons — secrets operators,
+    ingress, observability agents, security scanners. This ArgoCD framework delivers them to an
+    entire fleet, where enabling an addon on any cluster is a one-line Git commit.</p>
+    <dl class="kv">
+      <dt>role</dt><dd>platform designer</dd>
+      <dt>stack</dt><dd>ArgoCD, ApplicationSets, Helm (multi-source), app-of-apps, Bitbucket</dd>
+      <dt>addons managed</dt><dd>external-secrets, Traefik + CRDs, Reloader, Splunk OTEL collector, Wiz, and more</dd>
+    </dl>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="case-section reveal">
+    <h2>the problem</h2>
+    <p>Platform addons were being installed by hand, per cluster, by whoever built the cluster.
+    Versions drifted, security agents were missing where they mattered most, and nobody could
+    answer "which clusters run which version of what?" without spelunking.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the design</h2>
+    <p>Three GitOps primitives composed into a fleet-wide delivery system:</p>
+<pre class="ascii">
+ <span class="g">ApplicationSet</span> (cluster generator, label selector: environment)
+        │  discovers every registered cluster automatically
+        ▼
+ <span class="g">app-of-apps</span> Helm chart (per env: dev / qa / prod)
+        │  one Application per addon, rendered per cluster
+        ▼
+ <span class="c">git inventory repo</span>
+   └── {account_alias}/{cluster}/<span class="a">enabler.yaml</span>   ◄── one-line change
+        │        "traefik: enabled, version X"        enables an addon
+        ▼
+ ArgoCD syncs ──► addon lands on cluster, drift auto-corrected
+</pre>
+    <p>New clusters join the platform just by being registered with the right labels — the
+    ApplicationSet discovers them and reconciles their addon set from the inventory. No pipelines,
+    no tickets, no kubectl.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>engineering details</h2>
+    <p><strong>Multi-source Applications.</strong> Chart logic lives in one repo, per-cluster values
+    in another (the inventory), combined at render time — teams change <em>what</em> runs without
+    touching <em>how</em> it runs.</p>
+    <p><strong>Per-environment promotion.</strong> Dev, QA, and prod each have their own chart and
+    ApplicationSet, so an addon version rolls through environments the same way application code does.</p>
+    <p><strong>Cluster identity injected.</strong> Cluster name, account alias, environment, and app
+    code flow into every addon via generator parameters — one chart serves hundreds of differently-named
+    clusters with correct, cluster-specific configuration.</p>
+    <p><strong>Everything auditable.</strong> The Git log of the inventory repo <em>is</em> the change
+    history of the fleet's platform layer.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>from the code</h2>
+    <p>The load-bearing lines of the whole platform are in the ApplicationSet's multi-source spec —
+    generator labels flow into both the Helm parameters and the <em>path</em> of the per-cluster
+    values file (sanitized):</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">yaml · argo-appset.yml (excerpt)</span><button class="code-copy">copy</button></div>
+<pre><span class="c-kw">sources</span>:
+  - <span class="c-kw">path</span>: <span class="c-str">helm-charts/dev</span>                <span class="c-com"># how addons deploy — one repo</span>
+    <span class="c-kw">helm</span>:
+      <span class="c-kw">parameters</span>:
+        - { <span class="c-kw">name</span>: <span class="c-str">global.clusterName</span>, <span class="c-kw">value</span>: <span class="c-g">"{{name}}"</span> }
+      <span class="c-kw">valueFiles</span>:                        <span class="c-com"># what each cluster runs — inventory repo</span>
+        - <span class="c-str">$Values/inventory-dev/{{metadata.labels.account_alias}}/{{name}}/enabler.yaml</span>
+  - <span class="c-kw">ref</span>: <span class="c-str">Values</span></pre></div>
+    <p>Everything else follows from that one templated path: per-cluster truth is a folder in Git,
+    new clusters are discovered by label, and "what runs where" has exactly one source.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>impact</h2>
+    <p>Addon rollouts went from per-cluster manual work to <strong>a Git commit and a sync wave</strong>.
+    Drift self-heals, security coverage is provable, and "which clusters run what" is a
+    <span class="accent">git grep</span> away.</p>
+    <div class="tags">
+      <span class="tag">ArgoCD</span><span class="tag cy">ApplicationSets</span><span class="tag cy">Helm</span>
+      <span class="tag cy">app-of-apps</span><span class="tag am">GitOps</span><span class="tag am">Fleet management</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="eks-fleet-upgrades.html">← prev: EKS fleet upgrades</a>
+    <a class="btn" href="fleet-observability.html">next: fleet observability →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

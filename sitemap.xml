@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://manan.info/</loc></url>
+  <url><loc>https://manan.info/work.html</loc></url>
+  <url><loc>https://manan.info/blog.html</loc></url>
+  <url><loc>https://manan.info/ventures.html</loc></url>
+  <url><loc>https://manan.info/resume.html</loc></url>
+  <url><loc>https://manan.info/about.html</loc></url>
+  <url><loc>https://manan.info/work/bulk-cicd-modernization.html</loc></url>
+  <url><loc>https://manan.info/work/ecs-cicd-module.html</loc></url>
+  <url><loc>https://manan.info/work/eks-fleet-upgrades.html</loc></url>
+  <url><loc>https://manan.info/work/fleet-observability.html</loc></url>
+  <url><loc>https://manan.info/work/gitops-addon-platform.html</loc></url>
+  <url><loc>https://manan.info/work/gpu-llm-platform.html</loc></url>
+  <url><loc>https://manan.info/work/k8lens.html</loc></url>
+  <url><loc>https://manan.info/work/k8s-agent.html</loc></url>
+  <url><loc>https://manan.info/work/onboarding-multitenancy.html</loc></url>
+  <url><loc>https://manan.info/blog/building-k8s-ai-agent.html</loc></url>
+  <url><loc>https://manan.info/blog/gitops-at-fleet-scale.html</loc></url>
+  <url><loc>https://manan.info/blog/gpu-optimization-stack.html</loc></url>
+  <url><loc>https://manan.info/blog/k8lens-async-health.html</loc></url>
+  <url><loc>https://manan.info/blog/kro-resource-orchestrator.html</loc></url>
+  <url><loc>https://manan.info/blog/spot-gpus-llm-inference.html</loc></url>
+  <url><loc>https://manan.info/blog/upgrading-150-eks-clusters.html</loc></url>
+</urlset>

@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>k8sAgent — an agentic SRE copilot for Kubernetes — Manan Jain</title>
+<meta name="description" content="k8sAgent: an agentic SRE copilot for Kubernetes — convergence loop, MCP tool layer, Langfuse evaluation, RBAC-scoped safety model, and a GitOps write path.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="k8sAgent — an agentic SRE copilot for Kubernetes">
+<meta property="og:description" content="Convergence loop, MCP tool layer, Langfuse evaluation, RBAC-scoped safety model, and a GitOps write path.">
+<meta property="og:url" content="https://manan.info/work/k8s-agent.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="k8sAgent — an agentic SRE copilot for Kubernetes">
+<meta name="twitter:description" content="Convergence loop, MCP tools, Langfuse evals, RBAC-scoped safety.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../work.html">work</a> / k8s-agent</span>
+    <h1>k8sAgent: an agentic SRE copilot for Kubernetes<span class="accent">_</span></h1>
+    <p class="lede">Not a chatbot with cluster access — an agent designed like an SRE works:
+    plan the investigation, gather evidence in parallel, critique its own conclusion against live
+    cluster state, and only answer when the evidence converges. Built by someone who has operated
+    150+ clusters and 500+ GPUs, for the questions those fleets generate all day.</p>
+    <dl class="kv">
+      <dt>role</dt><dd>architect &amp; author</dd>
+      <dt>core stack</dt><dd>Python · LiteLLM (AWS Bedrock, model-agnostic) · MCP tool layer · LangGraph-style control loop · asyncio</dd>
+      <dt>llm ops</dt><dd>Langfuse — tracing, prompt versioning, golden-set evaluation · per-query token budgets</dd>
+      <dt>safety</dt><dd>RBAC-scoped read-only ServiceAccount · mutations only as GitOps PRs behind human approval</dd>
+    </dl>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="case-section reveal">
+    <h2>the thesis</h2>
+    <p>Every platform team is one team supporting forty. The bottleneck isn't fixing things — it's
+    the endless stream of <em>questions</em>: what's running here, why is that crashing, who's
+    eating this node. Each one costs a senior engineer a context switch. k8sAgent's design goal is
+    precise: <strong>answer the questions a mid-level SRE could answer, with the evidence a senior
+    SRE would demand, at the cost of an API call.</strong></p>
+    <p>That framing drives everything below. A demo agent answers questions; a production agent
+    has to be <em>right</em>, provably, or say it isn't sure. The architecture is organized around
+    that difference.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the convergence loop</h2>
+    <p>The heart of the system is a state machine — plan, act, observe, critique — that iterates
+    until the answer is supported by evidence or the agent explicitly asks for clarification.
+    No single-shot answers on diagnostic queries, ever:</p>
+
+    <svg viewBox="0 0 940 430" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto; margin:24px 0" role="img" aria-label="k8sAgent convergence loop diagram">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b84"/>
+        </marker>
+        <marker id="arrg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#4ade80"/>
+        </marker>
+      </defs>
+      <style>
+        .bx { fill: rgba(17,24,39,.85); stroke: rgba(148,163,184,.25); rx: 10; }
+        .bxg { stroke: rgba(74,222,128,.5); }
+        .bxb { stroke: rgba(50,108,229,.55); }
+        .bxa { stroke: rgba(251,191,36,.5); }
+        .t { font: 600 14px "Space Grotesk", sans-serif; fill: #f4f7fb; }
+        .s { font: 11px "JetBrains Mono", monospace; fill: #93a3ba; }
+        .lbl { font: 11px "JetBrains Mono", monospace; fill: #5b6b84; }
+        .lblg { fill: #4ade80; }
+        .ln { stroke: #5b6b84; stroke-width: 1.5; fill: none; marker-end: url(#arr); }
+        .lng { stroke: #4ade80; stroke-width: 1.5; fill: none; marker-end: url(#arrg); }
+      </style>
+      <!-- query in -->
+      <rect class="bx bxb" x="20" y="40" width="150" height="58" rx="10"/>
+      <text class="t" x="40" y="65">query</text>
+      <text class="s" x="40" y="84">+ intent router</text>
+      <!-- plan -->
+      <rect class="bx" x="230" y="40" width="150" height="58" rx="10"/>
+      <text class="t" x="250" y="65">PLAN</text>
+      <text class="s" x="250" y="84">pick tools + budget</text>
+      <!-- act -->
+      <rect class="bx" x="440" y="40" width="170" height="58" rx="10"/>
+      <text class="t" x="460" y="65">ACT</text>
+      <text class="s" x="460" y="84">parallel MCP tools</text>
+      <!-- observe -->
+      <rect class="bx" x="670" y="40" width="170" height="58" rx="10"/>
+      <text class="t" x="690" y="65">OBSERVE</text>
+      <text class="s" x="690" y="84">schema-filter + _hint</text>
+      <!-- critique -->
+      <rect class="bx bxa" x="440" y="180" width="230" height="66" rx="10"/>
+      <text class="t" x="460" y="206">CRITIQUE</text>
+      <text class="s" x="460" y="226">evidence sufficient? contradictions?</text>
+      <!-- converged -->
+      <rect class="bx bxg" x="230" y="320" width="240" height="66" rx="10"/>
+      <text class="t" x="250" y="346">ANSWER + EVIDENCE</text>
+      <text class="s" x="250" y="366">every claim cites tool output</text>
+      <!-- clarify -->
+      <rect class="bx" x="640" y="320" width="240" height="66" rx="10"/>
+      <text class="t" x="660" y="346">ASK / RE-PLAN</text>
+      <text class="s" x="660" y="366">low confidence → clarify, don't guess</text>
+      <!-- arrows -->
+      <line class="ln" x1="170" y1="69" x2="224" y2="69"/>
+      <line class="ln" x1="380" y1="69" x2="434" y2="69"/>
+      <line class="ln" x1="610" y1="69" x2="664" y2="69"/>
+      <path class="ln" d="M 755 98 L 755 150 L 676 205"/>
+      <path class="lng" d="M 480 246 L 380 314"/>
+      <path class="ln" d="M 600 246 L 720 314"/>
+      <path class="ln" d="M 640 350 C 200 300 180 130 226 100"/>
+      <text class="lbl lblg" x="330" y="288">converged</text>
+      <text class="lbl" x="648" y="288">not yet</text>
+      <text class="lbl" x="180" y="180">loop (max N iterations,</text>
+      <text class="lbl" x="180" y="196">token budget enforced)</text>
+      <!-- langfuse strip -->
+      <rect x="20" y="150" width="130" height="120" rx="10" fill="rgba(50,108,229,.06)" stroke="rgba(50,108,229,.35)"/>
+      <text class="t" x="36" y="178" style="font-size:13px">Langfuse</text>
+      <text class="s" x="36" y="200">traces every</text>
+      <text class="s" x="36" y="216">hop · scores ·</text>
+      <text class="s" x="36" y="232">prompt versions</text>
+      <text class="s" x="36" y="248">· eval runs</text>
+    </svg>
+
+    <p>Three properties make the loop production-shaped rather than demo-shaped:</p>
+    <p><strong>Bounded.</strong> Hard iteration cap and a per-query token budget. An agent that can
+    loop forever is an agent that can spend forever — the budget is enforced in the controller,
+    not suggested in the prompt.</p>
+    <p><strong>Self-critical.</strong> The critique step re-reads the assembled evidence against
+    the original question: are all claims backed by a tool result? do any two results contradict?
+    is a follow-up tool call cheaper than a wrong answer? Diagnosis-class queries route through
+    this gate every iteration.</p>
+    <p><strong>Honest under uncertainty.</strong> Below the confidence threshold, the agent asks a
+    clarifying question or states exactly which evidence is missing. "I don't know yet, here's
+    why" is a first-class terminal state — the one most agents are missing.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>system architecture</h2>
+<pre class="ascii">
+ <span class="c">interaction layer</span>     web console · Slack · CLI  (same API)
+        │
+ <span class="g">intent router</span>         small model, temp 0 — domain (k8s/aws) + activity
+        │                (list · describe · <span class="a">diagnose</span>) — cheap, fails safe
+        ▼
+ <span class="g">orchestrator</span>          LangGraph-style state machine — the convergence loop
+        │                per-query budget · iteration cap · confidence gate
+        ▼
+ <span class="c">MCP tool layer</span>        k8s_tool · aws_tool · file_tool — stdio contract,
+        │                parallel fan-out, read-only ServiceAccount
+        ▼
+ <span class="g">context engine</span>        YAML → schema extraction → LLM key-filter (batched,
+        │                persistent cache) → projected JSON + <span class="a">_hint</span>
+        ▼
+ <span class="c">observability</span>         Langfuse traces · scores · prompt registry · evals
+</pre>
+    <p><strong>Model-agnostic by construction.</strong> LiteLLM abstracts the provider — Bedrock
+    today, anything tomorrow — so model choice is a config value per pipeline stage: a small fast
+    model for routing and schema filtering, a strong model for diagnosis. Each stage's model,
+    prompt version, and cost are independently swappable and independently measured.</p>
+    <p><strong>Context engineering as a subsystem.</strong> Raw <span class="mono accent">kubectl -o yaml</span>
+    would drown any model. The context engine extracts each resource's schema, has a small LLM
+    select relevant keys for <em>this</em> query (one batched call per iteration), projects the
+    YAML down, and attaches an intent-aware <span class="mono accent">_hint</span> so formatting
+    knowledge travels with the data. Schema decisions persist in a cache that survives restarts;
+    trivial queries bypass the filter entirely via regex. Token spend per query drops by an order
+    of magnitude before the answer model sees a byte.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>evaluation: the part that makes it an engineering project</h2>
+    <p>Prompts change; without regression testing, every change is a gamble. The eval harness is
+    built on <strong>Langfuse</strong>: a golden set of cluster questions with known-correct
+    answers (seeded from real fleet scenarios — CrashLoopBackOff with bad image, OOMKilled with
+    memory pressure, pending pods with taint mismatches), replayed against every prompt or model
+    change. Each run scores <strong>correctness</strong> (does the answer match ground truth),
+    <strong>groundedness</strong> (is every claim traceable to a tool result), and
+    <strong>efficiency</strong> (iterations and tokens to convergence). A prompt change that
+    improves tone but regresses groundedness doesn't ship. Every production trace feeds the same
+    pipeline — real queries that converge slowly become tomorrow's eval cases. A gate run looks like this
+    (representative output):</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">shell · eval gate (representative run)</span><button class="code-copy">copy</button></div>
+<pre>$ python -m evals.run --suite golden-v3 --gate groundedness&gt;=0.98
+
+suite: golden-v3 · 24 scenarios          prompt: diagnose@v14
+─────────────────────────────────────────────────────────────
+correctness    23/24  (0.958)            <span class="c-g">✓ gate ≥ 0.95</span>
+groundedness   1.000                     <span class="c-g">✓ gate ≥ 0.98</span>
+efficiency     avg 2.1 iterations · 9.3k tokens/query
+vs diagnose@v13: +1 correctness · −8% tokens
+
+<span class="c-g">RESULT: SHIP</span> — promoted to prompt registry as diagnose@v14</pre></div>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the safety model</h2>
+    <p>Designed with the same posture as fleet tooling: <strong>the read path is scoped, the write
+    path is gated.</strong></p>
+    <p>The agent runs under a dedicated <strong>read-only RBAC ServiceAccount</strong> — its
+    permissions are a Kubernetes object you can audit, not a promise in a prompt. Namespace
+    scoping limits blast radius per deployment.</p>
+    <p>Mutations never execute directly — by design, the write path (roadmap v2) ships changes only as <strong>GitOps pull requests</strong> —
+    the agent proposes the manifest diff, a human approves, ArgoCD applies. The agent gets the
+    leverage of action with the audit trail and rollback story of GitOps, and an occasional wrong
+    proposal costs a PR review instead of an incident.</p>
+    <p>Every interaction is traced end-to-end in Langfuse — who asked what, which tools ran,
+    what the model saw, why it answered as it did. An agent you can't replay is an agent you
+    can't trust in a postmortem.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>console wireframe</h2>
+    <p>The interface is designed around a rule: <strong>never show a conclusion without its
+    evidence.</strong> Answer on the left; the tool results it cites and the live trace on the
+    right — one click from any claim to the JSON that supports it:</p>
+
+    <svg viewBox="0 0 940 480" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto; margin:24px 0" role="img" aria-label="k8sAgent console wireframe">
+      <style>
+        .wf { fill: rgba(17,24,39,.85); stroke: rgba(148,163,184,.25); }
+        .wfh { fill: rgba(148,163,184,.07); stroke: rgba(148,163,184,.25); }
+        .wt { font: 600 13px "Space Grotesk", sans-serif; fill: #f4f7fb; }
+        .ws { font: 10.5px "JetBrains Mono", monospace; fill: #93a3ba; }
+        .wf2 { font: 10.5px "JetBrains Mono", monospace; fill: #5b6b84; }
+        .wg { fill: #4ade80; }
+        .wb { fill: #7aa5f8; }
+        .wa { fill: #fbbf24; }
+      </style>
+      <!-- window -->
+      <rect class="wf" x="10" y="10" width="920" height="460" rx="14"/>
+      <!-- top bar -->
+      <rect class="wfh" x="10" y="10" width="920" height="44" rx="14"/>
+      <text class="wt" x="34" y="38">⎈ k8sAgent</text>
+      <rect class="wf" x="150" y="20" width="190" height="26" rx="13"/>
+      <text class="ws" x="166" y="37">cluster: prod-payments ▾</text>
+      <rect class="wf" x="352" y="20" width="150" height="26" rx="13"/>
+      <text class="ws" x="368" y="37" class="ws"><tspan class="wg">●</tspan> rbac: read-only</text>
+      <rect class="wf" x="770" y="20" width="140" height="26" rx="13"/>
+      <text class="ws" x="786" y="37">trace ↗ langfuse</text>
+      <!-- chat pane -->
+      <rect class="wf" x="26" y="70" width="540" height="384" rx="10"/>
+      <text class="wf2" x="42" y="94">CONVERSATION</text>
+      <rect class="wfh" x="42" y="106" width="440" height="34" rx="8"/>
+      <text class="ws" x="56" y="128">you: why is checkout-api crashlooping?</text>
+      <rect class="wf" x="42" y="152" width="500" height="188" rx="8"/>
+      <text class="ws" x="56" y="176"><tspan class="wg">agent</tspan> · converged in 2 iterations · 6 tool calls</text>
+      <text class="ws" x="56" y="200">Root cause: OOMKilled. Container limit 512Mi;</text>
+      <text class="ws" x="56" y="218">actual usage peaks 740Mi after v2.3.1 deploy.</text>
+      <text class="ws" x="56" y="242"><tspan class="wb">[evidence 1]</tspan> pod events — OOMKilled ×14</text>
+      <text class="ws" x="56" y="260"><tspan class="wb">[evidence 2]</tspan> metrics — memory 740Mi &gt; limit</text>
+      <text class="ws" x="56" y="278"><tspan class="wb">[evidence 3]</tspan> deploy history — limit unchanged in v2.3.1</text>
+      <text class="ws" x="56" y="306"><tspan class="wa">proposed fix</tspan> → PR: raise limit to 1Gi + HPA target</text>
+      <rect class="wfh" x="56" y="318" width="160" height="1"/>
+      <rect class="wfh" x="42" y="404" width="500" height="34" rx="8"/>
+      <text class="wf2" x="58" y="426">ask about this cluster…</text>
+      <!-- evidence pane -->
+      <rect class="wf" x="582" y="70" width="332" height="220" rx="10"/>
+      <text class="wf2" x="598" y="94">EVIDENCE · tool results</text>
+      <rect class="wfh" x="598" y="106" width="300" height="48" rx="8"/>
+      <text class="ws" x="612" y="126">k8s.pod_events → 14 × OOMKilled</text>
+      <text class="wf2" x="612" y="142">_hint: table · 3 keys of 41 kept</text>
+      <rect class="wfh" x="598" y="162" width="300" height="48" rx="8"/>
+      <text class="ws" x="612" y="182">k8s.pod_metrics → mem 740Mi / 512Mi</text>
+      <text class="wf2" x="612" y="198">_hint: threshold compare</text>
+      <rect class="wfh" x="598" y="218" width="300" height="48" rx="8"/>
+      <text class="ws" x="612" y="238">k8s.rollout_history → v2.3.1 (2h ago)</text>
+      <text class="wf2" x="612" y="254">_hint: timeline</text>
+      <!-- trace pane -->
+      <rect class="wf" x="582" y="304" width="332" height="150" rx="10"/>
+      <text class="wf2" x="598" y="328">TRACE · this answer</text>
+      <text class="ws" x="598" y="352"><tspan class="wg">▮</tspan> route 0.2s · <tspan class="wg">▮▮</tspan> plan 0.8s</text>
+      <text class="ws" x="598" y="372"><tspan class="wb">▮▮▮▮</tspan> tools ×6 parallel 1.9s</text>
+      <text class="ws" x="598" y="392"><tspan class="wa">▮▮</tspan> critique 1.1s → converged ✓</text>
+      <text class="ws" x="598" y="418">tokens: 8.4k / 40k budget · $0.011</text>
+      <text class="wf2" x="598" y="438">groundedness 1.0 · iterations 2/5</text>
+    </svg>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>from the code: intent-aware grounding</h2>
+    <p>The <span class="mono accent">_hint</span> generator reads the user's intent, not just the
+    data — formatting knowledge travels with each tool result:</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">python · controller.py (excerpt)</span><button class="code-copy">copy</button></div>
+<pre><span class="c-kw">if</span> format_type == <span class="c-str">"list"</span>:
+    <span class="c-kw">if</span> <span class="c-fn">any</span>(w <span class="c-kw">in</span> q <span class="c-kw">for</span> w <span class="c-kw">in</span> [<span class="c-str">"how many"</span>, <span class="c-str">"count"</span>, <span class="c-str">"total"</span>]):
+        <span class="c-kw">return</span> <span class="c-str">f"User wants a count. One sentence: there are {item_count} items."</span>
+    <span class="c-kw">if</span> <span class="c-fn">any</span>(w <span class="c-kw">in</span> q <span class="c-kw">for</span> w <span class="c-kw">in</span> [<span class="c-str">"failing"</span>, <span class="c-str">"crashloop"</span>, <span class="c-str">"oomkilled"</span>]):
+        <span class="c-kw">return</span> <span class="c-str">"Present ALL items as a table: name, namespace, status, reason. "</span> \
+               <span class="c-str">"Do not drop rows. Do not give fix steps — just the table."</span>
+<span class="c-com"># "failing pods" = a table, NOT a diagnosis — activity wins over keywords</span></pre></div>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>roadmap</h2>
+    <dl class="kv">
+      <dt>v1 — shipped</dt><dd>read path: routing, convergence loop, MCP tools, context engine, tracing, web console</dd>
+      <dt>v1.x — hardening</dt><dd>golden-set expansion, per-team RBAC profiles, Slack surface, cost dashboards per team</dd>
+      <dt>v2 — write path</dt><dd>GitOps PR proposals behind approval gates; runbook-aware remediation suggestions</dd>
+      <dt>v3 — proactive</dt><dd>subscribed to fleet events: the agent opens the investigation before the human asks</dd>
+    </dl>
+    <div class="tags">
+      <span class="tag k8">Kubernetes</span><span class="tag">Agentic AI</span><span class="tag cy">MCP</span>
+      <span class="tag cy">LiteLLM · Bedrock</span><span class="tag cy">Langfuse</span><span class="tag am">LangGraph-style loop</span><span class="tag am">AI × SRE</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="onboarding-multitenancy.html">← prev: self-service onboarding</a>
+    <a class="btn" href="k8lens.html">next: k8lens →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

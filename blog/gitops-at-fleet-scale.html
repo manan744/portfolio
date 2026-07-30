@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory-Driven GitOps — Manan Jain</title>
+<meta name="description" content="Inventory-driven GitOps: an architecture for delivering platform addons to 150+ Kubernetes clusters — ApplicationSets, multi-source composition, control-plane sharding, and promotion by environment.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="Inventory-Driven GitOps">
+<meta property="og:description" content="An architecture for delivering platform addons to 150+ clusters — one commit at a time.">
+<meta property="og:url" content="https://manan.info/blog/gitops-at-fleet-scale.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Inventory-Driven GitOps">
+<meta name="twitter:description" content="Delivering platform addons to 150+ clusters, one commit at a time.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../blog.html">blog</a> / gitops-at-fleet-scale</span>
+    <span class="eyebrow">gitops · architecture deep-dive · 10 min read</span>
+    <h1>Inventory-driven GitOps: the fleet as a directory tree<span class="accent">_</span></h1>
+    <p class="lede" style="margin-top:14px">GitOps for one cluster is a solved problem. GitOps for
+    150+ clusters is a <em>data-modeling</em> problem wearing a deployment costume. The decisive
+    question isn't which tool — it's where the fleet's truth lives.</p>
+  </div>
+</header>
+
+<div class="wrap" style="max-width:840px">
+
+  <div class="case-section reveal">
+    <h2>the problem nobody models</h2>
+    <p>Every Kubernetes cluster carries a platform layer — secrets operators, ingress controllers,
+    observability agents, security scanners — before the first application lands. At fleet scale
+    this layer has a shape most teams never write down: <strong>a sparse matrix of (cluster ×
+    addon × version)</strong>. Cluster A runs Traefik v2 and the OTEL collector; cluster B runs
+    Traefik v3 and adds a security agent; sixty clusters share a baseline; twelve have exceptions.</p>
+    <p>Hand-installed, that matrix lives nowhere — it's archaeology. Pipeline-installed, it lives
+    in CI variables — it's archaeology with YAML. The architecture below makes the matrix a
+    first-class, versioned artifact: <strong>a directory tree in Git</strong>.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>three primitives, composed</h2>
+    <p><strong>Discovery: ApplicationSets with cluster generators.</strong> Clusters register with
+    labels — environment, account, application code — and ApplicationSets enumerate them at
+    reconcile time. Membership in the platform is a property of <em>existing with the right
+    labels</em>, not of being listed in anyone's pipeline. This is the industry-standard answer to
+    multi-cluster fan-out for good reason: the alternative, hand-created Applications per cluster,
+    scales O(clusters × addons) in human attention.</p>
+    <p><strong>Rendering: app-of-apps per environment.</strong> A Helm chart per environment
+    (dev/qa/prod) renders one ArgoCD Application per addon per cluster. Addon versions promote
+    dev → qa → prod exactly like application code, because they <em>are</em> code.</p>
+    <p><strong>Truth: the per-cluster inventory.</strong> The decisive design choice. Chart logic
+    lives in one repo; each cluster owns an <span class="mono accent">enabler.yaml</span> in an
+    inventory repo declaring which addons it runs. ArgoCD's multi-source Applications staple the
+    two together at render time:</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">yaml · the load-bearing lines (sanitized)</span><button class="code-copy">copy</button></div>
+<pre><span class="c-kw">sources</span>:
+  - <span class="c-kw">path</span>: <span class="c-str">helm-charts/dev</span>                 <span class="c-com"># HOW addons deploy — chart repo</span>
+    <span class="c-kw">helm</span>:
+      <span class="c-kw">parameters</span>:
+        - { <span class="c-kw">name</span>: <span class="c-str">global.clusterName</span>, <span class="c-kw">value</span>: <span class="c-g">"{{name}}"</span> }
+      <span class="c-kw">valueFiles</span>:                         <span class="c-com"># WHAT this cluster runs — inventory repo</span>
+        - <span class="c-str">$Values/inventory-dev/{{metadata.labels.account_alias}}/{{name}}/enabler.yaml</span>
+  - <span class="c-kw">ref</span>: <span class="c-str">Values</span></pre></div>
+    <p>Read the templated path carefully — that's the whole architecture. The generator's label
+    output selects a folder; the folder <em>is</em> the cluster's row of the matrix. Enabling an
+    addon anywhere in the fleet is a one-line commit. Auditing the fleet is
+    <span class="mono accent">git log</span>. Answering "which clusters run what" is
+    <span class="mono accent">git grep</span>.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>separating how from what</h2>
+    <p>The two-repo split isn't tidiness — it's an access-control and change-velocity boundary.
+    The <em>chart repo</em> changes rarely, reviewed by platform engineers, and a bug there has
+    fleet-wide blast radius. The <em>inventory repo</em> changes constantly, one line at a time,
+    with per-cluster blast radius — safe to delegate to cluster owners. Collapsing them into one
+    repo forces both change classes through the same gate, and you end up either slowing trivial
+    enables to platform-review speed or exposing chart logic to casual edits. The boundary in the
+    repo layout <em>is</em> the org design.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>scaling the control plane itself</h2>
+    <p>At 150+ clusters, ArgoCD stops being an app you installed and becomes infrastructure you
+    capacity-plan. The community numbers match our experience: <strong>shard the application
+    controller</strong> at roughly one shard per 15–20 clusters (consistent-hashing shard
+    assignment minimizes reshuffling as the fleet grows); watch the <strong>repo server</strong> —
+    manifest generation is the silent bottleneck long before the controller is, since every addon
+    × cluster combination is a render; and keep per-shard application counts bounded (community
+    guidance clusters around a few hundred apps per shard). None of this is exotic — it's the same
+    lesson as every control plane: <strong>the thing that deploys everything needs its own SLO,
+    its own capacity model, and its own upgrade story.</strong> That last one bites hardest:
+    ArgoCD upgrading ArgoCD is a chicken-and-egg you want rehearsed before 150 clusters depend
+    on it.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>failure modes, from experience</h2>
+    <p><strong>Inventory schema debt.</strong> Once 150 clusters depend on the shape of
+    <span class="mono accent">enabler.yaml</span>, changing it is a migration with a
+    compatibility window, not a refactor. Version the schema from day one; leave room for
+    per-addon structured config, not just booleans.</p>
+    <p><strong>Sync storms.</strong> A chart-repo change fans out to every cluster at once —
+    which is the point, and also a thundering herd against the repo server and every cluster's
+    API server. Progressive sync (environment waves) turns fan-out into a rollout.</p>
+    <p><strong>The unmanaged escape hatch.</strong> The first time someone kubectl-patches an
+    addon "just for now," self-heal reverts it and they learn the platform is real. Make the
+    legitimate path (an inventory PR) faster than the illegitimate one, or people will fight the
+    reconciler instead of using it.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>references</h2>
+    <p class="mono" style="font-size:13px; line-height:2.1">
+    → <a href="https://argo-cd.readthedocs.io/en/stable/operator-manual/high_availability/" target="_blank" rel="noopener">Argo CD — high availability &amp; scaling</a><br>
+    → <a href="https://www.infracloud.io/blogs/sharding-clusters-across-argo-cd-application-controller-replicas/" target="_blank" rel="noopener">Sharding clusters across Argo CD controller replicas</a><br>
+    → <a href="https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/" target="_blank" rel="noopener">Argo CD — ApplicationSet controller</a></p>
+    <div class="tags" style="margin-top:18px">
+      <span class="tag k8">ArgoCD</span><span class="tag cy">ApplicationSets</span><span class="tag cy">Helm</span>
+      <span class="tag am">GitOps</span><span class="tag am">Fleet management</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="upgrading-150-eks-clusters.html">← prev: fleet upgrade doctrine</a>
+    <a class="btn" href="building-k8s-ai-agent.html">next: the grounded agent →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

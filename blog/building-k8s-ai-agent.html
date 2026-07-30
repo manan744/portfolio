@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Grounded Agent: an architecture for LLMs that operate infrastructure — Manan Jain</title>
+<meta name="description" content="A production architecture for infrastructure agents: ReAct with a critique gate, context engineering as a subsystem, evaluation-gated prompts via Langfuse, and a GitOps write path.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="The Grounded Agent: an architecture for LLMs that operate infrastructure">
+<meta property="og:description" content="ReAct with a critique gate, context engineering, Langfuse-gated evals, and a GitOps write path.">
+<meta property="og:url" content="https://manan.info/blog/building-k8s-ai-agent.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The Grounded Agent: an architecture for LLMs that operate infrastructure">
+<meta name="twitter:description" content="ReAct with a critique gate, context engineering, eval-gated prompts, GitOps writes.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../blog.html">blog</a> / building-k8s-ai-agent</span>
+    <span class="eyebrow">ai × infrastructure · architecture deep-dive · 12 min read</span>
+    <h1>The grounded agent: an architecture for LLMs that operate infrastructure<span class="accent">_</span></h1>
+    <p class="lede" style="margin-top:14px">Most organizations now run agents in production, and
+    the consistent finding is that <em>quality</em>, not cost, is the barrier. For infrastructure
+    agents the quality bar is brutal: a wrong answer about a cluster isn't a bad paragraph, it's
+    a misdirected incident response. This is the architecture I use — built as k8sAgent — and the
+    reasoning behind each layer.</p>
+  </div>
+</header>
+
+<div class="wrap" style="max-width:840px">
+
+  <div class="case-section reveal">
+    <h2>why "chatbot with kubectl" fails</h2>
+    <p>The naive design — a strong model, cluster credentials, a system prompt saying "be
+    careful" — fails in three characteristic ways. It <strong>hallucinates state</strong>,
+    describing pods that don't exist because plausibility is the model's native register. It
+    <strong>burns context</strong>, because raw <span class="mono accent">kubectl -o yaml</span>
+    output is enormous and mostly irrelevant, so signal drowns. And it <strong>answers when it
+    shouldn't</strong>, because nothing in a single forward pass distinguishes "I verified this"
+    from "this sounds right."</p>
+    <p>Each failure names a required subsystem: grounding, context engineering, and a convergence
+    loop with an explicit uncertainty exit. The literature converged on the same skeleton —
+    ReAct-style reason/act cycles plus a reflection pass — but the pattern names undersell where
+    the engineering actually lives. That's what this post is about.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the control loop: ReAct with a critique gate</h2>
+<pre class="ascii">
+ query ─► <span class="g">route</span> ─► <span class="g">plan</span> ─► <span class="g">act</span> (parallel tools) ─► <span class="g">observe</span>
+                     ▲                                │
+                     │                                ▼
+                     └────── refine ◄─── <span class="a">critique gate</span>
+                                              │
+                          converged ──────────┼─────────── low confidence
+                              ▼                                  ▼
+                    <span class="c">answer + cited evidence</span>            <span class="c">ask / state what's missing</span>
+</pre>
+    <p>Three engineering decisions make this loop production-shaped rather than demo-shaped:</p>
+    <p><strong>The critique gate is structural, not prompted.</strong> Reflection implemented as
+    "please double-check your answer" in a prompt degrades under distribution shift. Implemented
+    as a separate state with its own criteria — every claim mapped to a tool result, contradictions
+    between results surfaced, marginal value of one more tool call estimated — it's testable in
+    isolation and survives prompt drift. Diagnosis-class queries pass through it every iteration.</p>
+    <p><strong>Budgets are enforced in the controller, not requested in the prompt.</strong>
+    Iteration caps and per-query token budgets live in code. An agent whose loop can run away is
+    an agent whose cost model is fiction — and "the prompt says stop after five tries" is not an
+    enforcement mechanism.</p>
+    <p><strong>Uncertainty is a terminal state.</strong> Below the confidence threshold the agent
+    asks a clarifying question or states which evidence is missing. Designing "I don't know yet"
+    as a first-class output — with the same UI weight as an answer — is the single cheapest
+    reliability feature an agent can have, and the one most demos omit because it looks weak.
+    It's the opposite: it's what lets people trust the answers that do come back.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>routing: spend models like money</h2>
+    <p>An agent is a pipeline, and not every stage deserves the same model. Domain classification
+    (Kubernetes vs AWS) and activity classification (list / describe / diagnose) run on a small,
+    temperature-zero model — tens of tokens, milliseconds, fails safe to the conservative branch.
+    The strong model is reserved for the reasoning stage where it earns its cost. This also
+    unlocks <strong>per-activity system prompts</strong>: the presenter never drops rows and never
+    editorializes; the inspector structures around status and errors; the diagnostician correlates
+    evidence and normalizes units before recommending anything. Small prompts, separately
+    testable — the opposite of the 3,000-token mega-prompt that handles everything badly.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>context engineering is a subsystem, not a preprocessing step</h2>
+    <p>The highest-leverage code in the system never calls the big model. Tool output goes through
+    a pipeline: parse the YAML, extract top-level keys as a schema, have the small model select
+    which keys matter <em>for this query</em> (batched — one call covers all tools per iteration),
+    project the YAML down, and attach a <span class="mono accent">_hint</span> describing how this
+    data should be presented. Schema decisions persist in a cache that survives restarts; trivial
+    queries bypass the filter via regex. Token spend per query drops by an order of magnitude
+    before the reasoning model sees a byte.</p>
+    <p>The <span class="mono accent">_hint</span> mechanism deserves specific attention because it
+    solves a coupling problem: formatting knowledge travels <em>with the data</em> rather than
+    accreting in the agent's prompt. Add a tool, and its output presents correctly without
+    touching anything else. And the hints are intent-aware:</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">python · controller.py — intent-aware grounding hints</span><button class="code-copy">copy</button></div>
+<pre><span class="c-kw">if</span> format_type == <span class="c-str">"list"</span>:
+    <span class="c-kw">if</span> <span class="c-fn">any</span>(w <span class="c-kw">in</span> q <span class="c-kw">for</span> w <span class="c-kw">in</span> [<span class="c-str">"how many"</span>, <span class="c-str">"count"</span>, <span class="c-str">"total"</span>]):
+        <span class="c-kw">return</span> <span class="c-str">f"User wants a count. One sentence: there are {item_count} items."</span>
+    <span class="c-kw">if</span> <span class="c-fn">any</span>(w <span class="c-kw">in</span> q <span class="c-kw">for</span> w <span class="c-kw">in</span> [<span class="c-str">"failing"</span>, <span class="c-str">"crashloop"</span>, <span class="c-str">"oomkilled"</span>]):
+        <span class="c-kw">return</span> <span class="c-str">"Present ALL items as a table: name, namespace, status, reason. "</span> \
+               <span class="c-str">"Do not drop rows. Do not give fix steps — just the table."</span>
+<span class="c-com"># "failing pods" = a table, NOT a diagnosis — activity wins over keywords</span></pre></div>
+    <p>That comment is the hardest-won line in the codebase. Users say "failing" and mean
+    <em>show me</em>, not <em>fix it</em>. Intent classification must respect the activity, not
+    keyword-match its way into an unwanted diagnosis.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>evaluation-gated development</h2>
+    <p>Prompt changes without regression testing are gambling with extra steps. The eval harness —
+    built on <strong>Langfuse</strong>, which has emerged alongside LangGraph as the standard
+    production pairing for traced, evaluated agents — replays a golden set of cluster scenarios
+    (CrashLoopBackOff on a bad image, OOMKilled under memory pressure, Pending pods on taint
+    mismatches) against every prompt or model change. Three scores per run:
+    <strong>correctness</strong> against ground truth, <strong>groundedness</strong> (is every
+    claim traceable to a tool result — the anti-hallucination metric), and
+    <strong>efficiency</strong> (iterations and tokens to convergence). A change that improves
+    tone but regresses groundedness doesn't ship. Production traces feed the same pipeline:
+    queries that converge slowly become tomorrow's eval cases. This closed loop — trace, score,
+    curate, gate — is the difference between prompt-tweaking and engineering.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the write path is a security architecture</h2>
+    <p>Reads execute directly under a <strong>read-only RBAC ServiceAccount</strong> — the agent's
+    authority is a Kubernetes object you can audit, not a promise in a prompt. This matters more
+    than it looks: prompt injection via tool output is an open problem, and the sane mitigation
+    for infrastructure agents is making the worst-case injection outcome a weird read, never a
+    write.</p>
+    <p>Writes never execute at all. The write path emits <strong>GitOps pull requests</strong> —
+    the agent proposes a manifest diff, a human approves, the reconciler applies. This slots the
+    agent into the trust machinery that already exists (review, audit trail, rollback) instead of
+    inventing a parallel approval system. A wrong proposal costs a code review; a wrong direct
+    write costs a postmortem. Plan-then-execute with a human gate isn't a limitation of the
+    design — it <em>is</em> the design.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>what I'd tell someone building one</h2>
+    <p>Build the eval set before the second prompt. Put budgets in code on day one. Make
+    "I don't know" a designed output. Spend your cleverness on context engineering, not prompt
+    poetry — the model can't reason over what it can't see, and it reasons worst over everything
+    at once. And decide the write-path security model before the demo works, because after the
+    demo works, nobody wants to hear about it.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>references</h2>
+    <p class="mono" style="font-size:13px; line-height:2.1">
+    → <a href="https://arxiv.org/abs/2210.03629" target="_blank" rel="noopener">Yao et al. — ReAct: Synergizing Reasoning and Acting in Language Models</a><br>
+    → <a href="https://langfuse.com/docs" target="_blank" rel="noopener">Langfuse — tracing, prompt registry, evaluations</a><br>
+    → <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">Model Context Protocol — the tool contract</a><br>
+    → <a href="https://arxiv.org/pdf/2509.08646" target="_blank" rel="noopener">Architecting resilient LLM agents — secure plan-then-execute</a></p>
+    <div class="tags" style="margin-top:18px">
+      <span class="tag k8">Kubernetes</span><span class="tag">Agentic AI</span><span class="tag cy">MCP</span>
+      <span class="tag cy">Langfuse</span><span class="tag am">ReAct + reflection</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="gitops-at-fleet-scale.html">← prev: inventory-driven GitOps</a>
+    <a class="btn" href="k8lens-async-health.html">next: probe-native observability →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

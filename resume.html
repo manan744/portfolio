@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resume — Manan Jain</title>
+<meta name="description" content="Resume of Manan Jain — Senior Platform &amp; Cloud Engineer. 150+ EKS clusters, 30K+ pods, GPU/LLM platform on 500+ GPUs, GitOps at scale.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="Resume — Manan Jain">
+<meta property="og:description" content="Resume of Manan Jain — Senior Platform &amp; Cloud Engineer. 150+ EKS clusters, 30K+ pods, GPU/LLM platform on 500+ GPUs, GitOps at scale.">
+<meta property="og:url" content="https://manan.info/resume.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Resume — Manan Jain">
+<meta name="twitter:description" content="Resume of Manan Jain — Senior Platform &amp; Cloud Engineer. 150+ EKS clusters, 30K+ pods, GPU/LLM platform on 500+ GPUs, GitOps at scale.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="index.html">~</a> / resume</span>
+    <div style="display:grid; grid-template-columns: 1fr auto; gap:40px; align-items:center">
+      <div>
+        <span class="eyebrow">$ kubectl rollout history deployment/manan</span>
+        <h1>Career rollout history<span class="accent">_</span></h1>
+        <p class="lede">Senior Platform &amp; Cloud Engineer specializing in large-scale Kubernetes
+        infrastructure on AWS — 150+ EKS clusters, ~1,000 nodes, 30K+ running pods serving 40+
+        engineering teams. Every revision shipped, none rolled back.</p>
+        <div style="margin-top:26px; display:flex; gap:14px; flex-wrap:wrap">
+          <a class="btn solid" href="assets/Manan-Jain-Resume-2026.pdf" download="Manan-Jain-Resume.pdf">⬇ download CV (pdf)</a>
+        </div>
+      </div>
+      <div class="portrait" style="width:min(180px,38vw)">
+        <div class="frame">
+          <img src="assets/photo.jpg" alt="Manan Jain" width="1254" height="1254"
+               onerror="this.style.display='none';document.getElementById('avatar-fallback').style.display='flex'">
+          <div class="avatar-fallback" id="avatar-fallback" style="display:none">
+            <span class="initials" style="font-size:48px">MJ</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ============ EXPERIENCE ============ -->
+  <div class="case-section reveal">
+    <h2>experience</h2>
+
+    <div class="card" style="margin-top:22px; border-left:3px solid var(--green)">
+      <span class="file">REVISION 4 · current · <span style="color:var(--green)">● Running</span></span>
+      <div style="display:flex; align-items:center; gap:14px; margin-top:4px">
+        <img src="assets/logo-aivar.svg" alt="Aivar Innovation" width="44" height="44" style="border-radius:10px">
+        <div>
+          <h3 style="margin-bottom:2px">Senior DevOps Engineer — Aivar Innovation</h3>
+          <p class="mono" style="font-size:12.5px">Bengaluru, India · Jun 2026 → present</p>
+        </div>
+      </div>
+      <p style="margin-top:14px; margin-bottom:10px"><strong>KhiladiPro</strong> <span class="mono accent" style="font-size:12px">● ongoing</span> —
+      supporting the engineering team on <strong>Amazon EKS</strong>, <strong>Flyte-based workflow
+      orchestration</strong>, and <strong>GPU orchestration for ML workloads</strong>.</p>
+      <p>Also: researched and presented <strong>kro (Kube Resource Orchestrator)</strong> at Pod Weekly — a live
+      EKS demo of ResourceGraphDefinitions, CEL-inferred dependency graphs, and kro + ACK
+      orchestrating cloud and cluster resources in one reconciliation loop
+      (<a href="blog/kro-resource-orchestrator.html">write-up</a>).</p>
+      <div class="tags"><span class="tag k8">EKS</span><span class="tag">Flyte</span><span class="tag">GPU orchestration</span><span class="tag cy">ML infrastructure</span></div>
+    </div>
+
+    <div class="card" style="margin-top:18px; border-left:3px solid var(--k8s)">
+      <span class="file">REVISION 3</span>
+      <div style="display:flex; align-items:center; gap:14px; margin-top:4px">
+        <img src="assets/logo-zs.svg" alt="ZS Associates" width="44" height="44" style="border-radius:10px">
+        <div>
+          <h3 style="margin-bottom:2px">Senior Cloud Engineer — ZS Associates</h3>
+          <p class="mono" style="font-size:12.5px">Pune, India · Jul 2024 → Jun 2026</p>
+        </div>
+      </div>
+      <div style="margin-top:14px"></div>
+      <p style="margin-bottom:10px">Architected a <strong>Kubernetes-based LLM inference platform</strong> on Spot-backed GPUs —
+      scheduling, fault-tolerance and retry strategies sustaining <strong>~80% utilization across 500+ GPUs</strong>
+      and driving a <strong>~60% compute cost reduction</strong> for large-scale batch AI workloads.</p>
+      <p style="margin-bottom:10px">Platform enablement for <strong>40+ engineering teams</strong> on Amazon EKS:
+      <strong>150+ clusters, ~1,000 nodes, 30K+ running pods</strong>. Designed the centralized
+      <strong>ArgoCD GitOps platform</strong> managing Kubernetes add-ons for 120+ applications across the fleet,
+      with Argo CD Notifications wired across 100+ projects.</p>
+      <p style="margin-bottom:10px">Implemented <strong>Amazon Managed Prometheus + Grafana</strong> observability
+      for 150+ clusters and ran an internal uptime platform covering <strong>2,500+ endpoints</strong> — control-plane,
+      ingress, infra and application metrics, with ingestion aggressively trimmed to keep costs low.</p>
+      <p>Researched and deployed <strong>50+ Kubernetes add-ons</strong> (MinIO, Wiz, Kafka, Redis, Dgraph, S3/EFS CSI,
+      DCGM exporter); built application-focused <strong>Terraform modules provisioning 80+ AWS resources</strong>
+      through a single pipeline; prototyped <strong>EMR on EKS</strong> with Karpenter for Spark workloads.</p>
+      <div class="tags"><span class="tag k8">EKS</span><span class="tag">GPU/LLM infra</span><span class="tag cy">ArgoCD</span><span class="tag cy">AMP/Grafana</span><span class="tag am">Karpenter</span><span class="tag am">Terraform</span></div>
+    </div>
+
+    <div class="card" style="margin-top:18px; border-left:3px solid var(--cyan)">
+      <span class="file">REVISION 2</span>
+      <div style="display:flex; align-items:center; gap:14px; margin-top:4px">
+        <img src="assets/logo-zs.svg" alt="ZS Associates" width="44" height="44" style="border-radius:10px">
+        <div>
+          <h3 style="margin-bottom:2px">Cloud Engineer — ZS Associates</h3>
+          <p class="mono" style="font-size:12.5px">Pune, India · Sep 2022 → Jul 2024</p>
+        </div>
+      </div>
+      <div style="margin-top:14px"></div>
+      <p style="margin-bottom:10px">Deployed and operated <strong>100+ applications on Amazon ECS</strong> with fully
+      automated CI/CD, and delivered <strong>250+ application deployments on EKS</strong> via TeamCity, ArgoCD, Helm
+      and GitOps — making deployments repeatable and boring as teams and clusters multiplied.</p>
+      <p style="margin-bottom:10px">Built <strong>bulk-upgrade automation patching 500+ CI/CD pipelines in
+      parallel</strong>, replacing manual, error-prone updates. Led large-scale migrations —
+      <strong>EC2 → ECS/EKS and ECS → EKS</strong> — untangling legacy assumptions along the way.</p>
+      <p>Owned <strong>20+ COTS platforms</strong> (Sysdig, Dependency Track, ArgoCD) across ECS/EKS; led the Sysdig
+      POC and enterprise rollout across <strong>500+ products in ~1 month</strong> using automated rollout tooling.</p>
+      <div class="tags"><span class="tag k8">ECS/EKS</span><span class="tag cy">TeamCity</span><span class="tag cy">Helm</span><span class="tag am">Migrations</span><span class="tag am">Bulk automation</span></div>
+    </div>
+
+    <div class="card" style="margin-top:18px; border-left:3px solid var(--text-faint)">
+      <span class="file">REVISION 1</span>
+      <div style="display:flex; align-items:center; gap:14px; margin-top:4px">
+        <img src="assets/logo-zs.svg" alt="ZS Associates" width="44" height="44" style="border-radius:10px">
+        <div>
+          <h3 style="margin-bottom:2px">Cloud Engineer Intern — ZS Associates</h3>
+          <p class="mono" style="font-size:12.5px">Pune, India · Nov 2021 → Sep 2022</p>
+        </div>
+      </div>
+      <div style="margin-top:14px"></div>
+      <p>Owned day-to-day AWS operations and platform lifecycle; built server bootstrapping automation for
+      Windows and Linux; wrote cloud deployment standards and governance guidelines; tuned resource
+      allocation for cost; acted as escalation point for production issues beyond the runbooks.</p>
+      <div class="tags"><span class="tag k8">AWS ops</span><span class="tag cy">Automation</span><span class="tag am">Governance</span></div>
+    </div>
+  </div>
+
+  <!-- ============ SKILLS ============ -->
+  <div class="case-section reveal">
+    <h2>skills</h2>
+    <dl class="kv">
+      <dt>cloud</dt><dd>AWS — EKS, ECS, EMR, EC2, S3, IAM, VPC</dd>
+      <dt>containers</dt><dd>Kubernetes · Docker · Helm · Cilium · Karpenter · Flyte · container networking · cluster operations</dd>
+      <dt>iac</dt><dd>Terraform · infrastructure automation</dd>
+      <dt>ci/cd &amp; gitops</dt><dd>ArgoCD · GitOps · TeamCity · CodePipeline/CodeBuild/CodeDeploy · Bitbucket · Jenkins</dd>
+      <dt>observability</dt><dd>Prometheus · Amazon Managed Prometheus · Grafana · Splunk · Datadog · metrics &amp; alerting</dd>
+      <dt>programming</dt><dd>Python · shell scripting</dd>
+      <dt>platform</dt><dd>Kafka · Redis · MinIO · Wiz · Sysdig · cloud security · vulnerability scanning</dd>
+    </dl>
+  </div>
+
+  <!-- ============ EDUCATION ============ -->
+  <div class="case-section reveal">
+    <h2>education</h2>
+    <div class="card" style="margin-top:18px">
+      <h3>B.Tech — Computer Science &amp; Engineering</h3>
+      <p class="mono" style="font-size:12.5px; margin-top:4px">MIT-ADT University, Pune · graduated Aug 2022 · GPA 7.9</p>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="work.html">← case studies</a>
+    <a class="btn solid" href="assets/Manan-Jain-Resume-2026.pdf" download="Manan-Jain-Resume.pdf">⬇ download CV</a>
+  </div>
+</div>
+
+<script src="assets/main.js"></script>
+</body>
+</html>

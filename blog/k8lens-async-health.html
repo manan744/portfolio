@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Probe-Native Observability — Manan Jain</title>
+<meta name="description" content="Closing the gap between orchestrator state and user experience: discovery-driven in-cluster probing, cardinality economics, and SLO wiring — the design behind k8lens.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="Probe-Native Observability">
+<meta property="og:description" content="Closing the gap between orchestrator state and user experience — the design behind k8lens.">
+<meta property="og:url" content="https://manan.info/blog/k8lens-async-health.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Probe-Native Observability">
+<meta name="twitter:description" content="Discovery-driven in-cluster probing, cardinality economics, SLO wiring.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../blog.html">blog</a> / k8lens-async-health</span>
+    <span class="eyebrow">observability · architecture deep-dive · 9 min read</span>
+    <h1>Probe-native observability: measuring what Kubernetes can't tell you<span class="accent">_</span></h1>
+    <p class="lede" style="margin-top:14px">Orchestrator state and user experience are different
+    facts, and the gap between them is where the worst incidents hide. A design framework for
+    in-cluster synthetic probing — and the decisions behind k8lens, one of the tools feeding a
+    2,500+ endpoint uptime platform.</p>
+  </div>
+</header>
+
+<div class="wrap" style="max-width:840px">
+
+  <div class="case-section reveal">
+    <h2>the epistemology of "up"</h2>
+    <p>Kubernetes gives you three verdicts about a workload — the pod phase, the probe results,
+    the endpoint membership — and all three can be green while users get 503s. Liveness probes
+    check what the container author thought to check; readiness gates traffic but not
+    correctness; <span class="mono accent">Running</span> means the process exists. None of them
+    answer the question an SRE actually gets paged for: <strong>does an HTTP request to this
+    service, over the real network path, return a healthy response right now?</strong></p>
+    <p>That question has exactly one honest measurement: send the request and look. Everything
+    else is inference from proxies. Synthetic probing is unfashionable next to traces and eBPF —
+    and it remains the only signal that measures the thing users experience, which is why the
+    mature stack treats it as a layer, not an alternative: metrics say <em>how it's failing</em>,
+    traces say <em>where</em>, probes say <em>whether</em>. You want "whether" from the most
+    boring, most trustworthy component you own.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>where you probe from changes what you measure</h2>
+    <p>External probing (the Pingdoms of the world, or blackbox exporter outside the cluster)
+    measures the full path — DNS, CDN, ingress — which is right for the public edge and wrong for
+    diagnosis: an external failure tells you <em>something</em> in six layers broke.
+    <strong>In-cluster probing</strong> measures the path your services actually use to talk to
+    each other — cluster DNS
+    (<span class="mono accent">name.namespace.svc.cluster.local</span>), kube-proxy, the pod
+    network. The two disagree exactly when the diagnosis is interesting: external-red/internal-green
+    is an edge problem; external-green/internal-red is east-west rot that external monitoring
+    will never see. Run both; alert on the delta.</p>
+    <p>k8lens is the in-cluster half, and its defining choice is <strong>discovery over
+    configuration</strong>: it enumerates the cluster's own Ingress and Service objects at sweep
+    time and probes what it finds. Target lists are the config-drift failure mode of every probing
+    setup I've seen — the service that pages you is always the one nobody registered. The cluster
+    already knows what's running; ask it. Opt-out is a resource annotation, so teams manage their
+    exposure with Kubernetes primitives rather than tickets against a config file.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the prober's failure model must exceed the failures it measures</h2>
+    <p>A sequential sweep with polite timeouts takes tens of minutes at hundreds of endpoints —
+    useless against a 60-second interval. The async fan-out (one shared
+    <span class="mono accent">aiohttp</span> session, bounded
+    <span class="mono accent">asyncio.gather</span>) is table stakes; the two decisions that
+    matter are subtler:</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">python · the probe, with failure-as-data semantics</span><button class="code-copy">copy</button></div>
+<pre><span class="c-kw">async def</span> <span class="c-fn">_check_single_service</span>(self, session, service, host, port):
+    key = <span class="c-str">f"{service.metadata.namespace}/{service.metadata.name}"</span>
+    <span class="c-kw">for</span> path <span class="c-kw">in</span> SERVICE_HEALTH_PATHS:          <span class="c-com"># /health, /healthz, /ping…</span>
+        <span class="c-kw">try</span>:
+            <span class="c-kw">async with</span> session.get(<span class="c-str">f"http://{host}:{port}{path}"</span>) <span class="c-kw">as</span> resp:
+                <span class="c-kw">if</span> resp.status == <span class="c-g">200</span>:
+                    health_check_counter.labels(type=<span class="c-str">"service"</span>,
+                        status=<span class="c-str">"success"</span>, namespace=namespace).inc()
+                    <span class="c-kw">return</span> key, <span class="c-kw">True</span>, namespace, name
+        <span class="c-kw">except</span> Exception:
+            <span class="c-kw">continue</span>                <span class="c-com"># failure is a data point, not a crash</span></pre></div>
+    <p><strong>Exception isolation as policy.</strong>
+    <span class="mono accent">gather(..., return_exceptions=True)</span> plus per-probe capture
+    means a hanging endpoint becomes an unhealthy-row in the results. The prober is the component
+    whose own failure model must be strictly stronger than the failures it measures — a monitor
+    that dies on the outage it was built to detect has negative value, because it taught people
+    to rely on it.</p>
+    <p><strong>One session, many requests.</strong> Connection pooling keeps hundreds of
+    concurrent probes from exhausting sockets or hammering cluster DNS. The line between
+    "efficient monitor" and "accidental load test" is a session object.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>cardinality is the second bill</h2>
+    <p>Every label combination on a Prometheus metric is a new time series, stored and indexed
+    forever-ish. Labeling probe results by endpoint URL or pod name at cluster scale detonates
+    the TSDB — the classic self-inflicted observability outage. k8lens labels by
+    <strong>type, status, namespace</strong> — enough to alert and aggregate, cheap enough to run
+    on 150 clusters. Per-endpoint detail lives in logs, where high cardinality is priced
+    honestly. The same discipline (aggressive ingestion trimming, cardinality budgets) is what
+    kept the fleet-wide Managed Prometheus rollout affordable; a metric schema is a cost model
+    whether you designed one or not.</p>
+    <p>And metrics are the <em>product</em>, not a byproduct: k8lens ships no UI. Results land in
+    Prometheus, where they get the alerting, dashboards, retention, and SLO math every other
+    signal gets — probe success ratios feed availability SLOs and multi-window burn-rate alerts
+    for free. Building a bespoke monitoring UI is how side tools die; exporting metrics is how
+    they get adopted.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the framework, compressed</h2>
+    <p>Four principles, portable to any probing system: <strong>measure the request, not the
+    proxy</strong> (synthetic HTTP over inferred state); <strong>discover, don't configure</strong>
+    (the platform's own API is the target list); <strong>fail as data</strong> (the prober
+    outlives what it probes); <strong>emit into the paved metric path</strong> (no bespoke UI,
+    cardinality budgeted). Everything else — intervals, paths, TLS posture — is configuration.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>references</h2>
+    <p class="mono" style="font-size:13px; line-height:2.1">
+    → <a href="https://sre.google/workbook/alerting-on-slos/" target="_blank" rel="noopener">Google SRE Workbook — alerting on SLOs (burn rates)</a><br>
+    → <a href="https://github.com/prometheus/blackbox_exporter" target="_blank" rel="noopener">Prometheus blackbox exporter — the external counterpart</a><br>
+    → <a href="https://prometheus.io/docs/practices/naming/" target="_blank" rel="noopener">Prometheus — metric and label naming (cardinality)</a></p>
+    <div class="tags" style="margin-top:18px">
+      <span class="tag k8">Kubernetes</span><span class="tag cy">asyncio</span><span class="tag cy">aiohttp</span>
+      <span class="tag cy">Prometheus</span><span class="tag am">SLOs</span><span class="tag am">Observability</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="building-k8s-ai-agent.html">← prev: the grounded agent</a>
+    <a class="btn" href="../blog.html">all posts →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

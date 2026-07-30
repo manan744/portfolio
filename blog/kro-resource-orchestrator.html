@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>kro: custom Kubernetes APIs without writing a controller — Manan Jain</title>
+<meta name="description" content="A deep-dive on kro (Kube Resource Orchestrator): ResourceGraphDefinitions, CEL-inferred dependency DAGs, kro + ACK for cloud-and-cluster in one graph, and an honest maturity assessment. From my Pod Weekly live demo.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="kro: custom Kubernetes APIs without writing a controller">
+<meta property="og:description" content="ResourceGraphDefinitions, CEL-inferred DAGs, kro + ACK — and an honest maturity assessment. From a live EKS demo.">
+<meta property="og:url" content="https://manan.info/blog/kro-resource-orchestrator.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="kro: custom Kubernetes APIs without writing a controller">
+<meta name="twitter:description" content="ResourceGraphDefinitions, CEL-inferred DAGs, kro + ACK — from a live EKS demo.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../blog.html">blog</a> / kro-resource-orchestrator</span>
+    <span class="eyebrow">platform engineering · talk write-up · 11 min read</span>
+    <h1>kro: custom Kubernetes APIs without writing a controller<span class="accent">_</span></h1>
+    <p class="lede" style="margin-top:14px">I presented kro (Kube Resource Orchestrator, pronounced
+    "crow") with a live EKS demo at Pod Weekly — RGDs, CEL-inferred dependency graphs, and
+    cloud-plus-cluster orchestration in a single reconciliation loop. This is the write-up,
+    including the parts a slide can't hold.</p>
+    <div style="margin-top:22px; display:flex; gap:14px; flex-wrap:wrap">
+      <a class="btn" href="../assets/kro-presentation.pdf" download="kro-presentation.pdf">⬇ download the deck (pdf)</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap" style="max-width:840px">
+
+  <div class="case-section reveal">
+    <h2>the problem: building <em>for</em> Kubernetes, not <em>with</em> it</h2>
+    <p>The Operator pattern is Kubernetes' superpower and its tax. Want to give your teams a
+    clean <span class="mono accent">WebApp</span> API instead of a Deployment + Service + HPA +
+    Ingress ritual? Today that means a CRD <em>and a controller</em>: Go expertise, a
+    reconciliation loop, RBAC, leader election, upgrade strategy, monitoring — per abstraction.
+    Large platform teams end up operating a fleet of bespoke controllers, each one infrastructure
+    that exists to hide infrastructure. AWS's own customer research captured the mood precisely:
+    <em>"we often feel like we are building for Kubernetes rather than with Kubernetes."</em></p>
+    <p>Having built an internal developer platform for 40+ teams the hard way — Helm charts,
+    Terraform modules, and a GitOps addon layer — I find this gap deeply familiar. The abstraction
+    layer is the product; the controller plumbing is pure cost. kro's bet is that the plumbing can
+    be generated.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>what kro actually does</h2>
+    <p>kro (originally AWS Labs, Nov 2024; now donated to <strong>kubernetes-sigs</strong> under
+    CNCF SIG Cloud Provider) installs one CRD:
+    <span class="mono accent">ResourceGraphDefinition</span>. You write an RGD in YAML; at
+    runtime kro validates it, <strong>generates a new CRD for your API, and spins up a dedicated
+    micro-controller for it</strong> — reconciliation loop, status propagation, cascade delete
+    included. No Go anywhere.</p>
+    <p>An RGD has two halves. The <strong>schema</strong> is your API surface, written in
+    SimpleSchema — types, defaults, and validation in single readable lines instead of OpenAPI
+    boilerplate. The <strong>resources</strong> are what gets created, as templates wired together
+    with CEL expressions:</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">yaml · ResourceGraphDefinition (from the demo)</span><button class="code-copy">copy</button></div>
+<pre><span class="c-kw">spec</span>:
+  <span class="c-kw">schema</span>:
+    <span class="c-kw">kind</span>: WebApp                    <span class="c-com"># a brand-new Kubernetes API</span>
+    <span class="c-kw">spec</span>:
+      <span class="c-kw">name</span>: string
+      <span class="c-kw">image</span>: string | default=<span class="c-str">"nginx:alpine"</span>
+      <span class="c-kw">replicas</span>: integer | default=<span class="c-g">2</span>
+      <span class="c-kw">hpa.enabled</span>: boolean | default=<span class="c-g">false</span>
+    <span class="c-kw">status</span>:                         <span class="c-com"># bubble child status up via CEL</span>
+      <span class="c-kw">availableReplicas</span>: <span class="c-g">${deployment.status.availableReplicas}</span>
+  <span class="c-kw">resources</span>:
+    - <span class="c-kw">id</span>: deployment
+      <span class="c-kw">template</span>:
+        <span class="c-kw">kind</span>: Deployment
+        <span class="c-kw">spec.replicas</span>: <span class="c-g">${schema.spec.replicas}</span>
+    - <span class="c-kw">id</span>: service
+      <span class="c-kw">template</span>:
+        <span class="c-kw">kind</span>: Service   <span class="c-com"># depends on deployment — inferred, not declared:</span>
+        <span class="c-kw">spec.selector</span>: <span class="c-g">${deployment.spec.selector.matchLabels}</span></pre></div>
+    <p>The developer-facing result from the live demo: a platform team defines that RGD once, and
+    an application team deploys a production-shaped stack with <strong>eight lines of YAML</strong>.
+    Deployment, Service, conditional HPA, status roll-up, and cascade delete — all conjured from
+    <span class="mono accent">kind: WebApp</span>.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the interesting part: the DAG is implicit</h2>
+    <p>Most orchestration systems make you declare ordering (<span class="mono accent">dependsOn</span>,
+    Helm hooks, sync waves). kro doesn't have an ordering field at all — it <strong>parses your
+    CEL expressions and infers the dependency graph</strong>. If the Service references
+    <span class="mono accent">${deployment.spec.selector.matchLabels}</span>, the Service depends
+    on the Deployment. That's the whole mechanism, and it produces real graph semantics:</p>
+    <p><strong>Topological creation, reverse-order deletion</strong> — parallel branches (two
+    Deployments referencing only a shared ConfigMap) are created simultaneously; diamond
+    convergence (a Service referencing both) waits for both branches. Deletion unwinds the graph
+    backwards, so no orphans.</p>
+    <p><strong>Blocking on resolvability, not existence.</strong> A dependent resource waits until
+    the referenced CEL <em>field</em> is resolvable — not merely until the parent object exists.
+    That's a subtly stronger guarantee than most hand-written controllers bother with, and it's
+    the same class of bug as the two-phase waiter problem in my
+    <a href="upgrading-150-eks-clusters.html">fleet-upgrade doctrine</a>: "exists" and "ready"
+    are different facts.</p>
+    <p><strong>Cycles fail at apply time</strong> with a clear error, and the computed order is
+    inspectable: <span class="mono accent">kubectl get rgd webapp-rgd -o
+    jsonpath='{.status.topologicalOrder}'</span>.</p>
+    <p>CEL is the right glue precisely because it's boring: no side effects, no loops, guaranteed
+    termination, nanosecond evaluation, and type-checked at apply time against fetched OpenAPI
+    schemas. Errors surface before any instance runs — not in a controller log at 2 a.m.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>kro + ACK: cloud and cluster in one graph</h2>
+    <p>The demo's sharpest moment: AWS Controllers for Kubernetes (ACK) exposes AWS resources —
+    S3, RDS, DynamoDB — as CRDs, and kro treats them like any other node in the graph. A CEL
+    reference from a Deployment's env to a bucket's status field makes <em>cloud provisioning and
+    app deployment a single reconciliation loop</em>:</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">yaml · the cloud-to-cluster edge</span><button class="code-copy">copy</button></div>
+<pre><span class="c-kw">resources</span>:
+  - <span class="c-kw">id</span>: bucket
+    <span class="c-kw">readyWhen</span>:
+      - <span class="c-g">${bucket.status.ackResourceMetadata.arn != ""}</span>   <span class="c-com"># ready = ARN exists</span>
+    <span class="c-kw">template</span>:
+      <span class="c-kw">apiVersion</span>: s3.services.k8s.aws/v1alpha1
+      <span class="c-kw">kind</span>: Bucket
+  - <span class="c-kw">id</span>: deployment
+    <span class="c-kw">template</span>:
+      <span class="c-kw">env</span>:
+        - <span class="c-kw">name</span>: S3_BUCKET_ARN
+          <span class="c-kw">value</span>: <span class="c-g">"${bucket.status.ackResourceMetadata.arn}"</span>  <span class="c-com"># cloud status → app env</span></pre></div>
+    <p>No glue code, no init-container hacks, no Terraform-then-Helm two-phase deploy. The CEL
+    expression <em>is</em> the dependency edge. Live on the cluster:
+    <span class="mono accent">kubectl exec deploy/s3-demo-app -- env | grep S3_BUCKET_ARN</span>
+    returns a real ARN the pod learned from a resource AWS created seconds earlier.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>where it sits in the landscape</h2>
+    <p>The honest comparison, as I presented it: <strong>Helm</strong> packages and templates but
+    is static — no runtime reconciliation, ordering via hook folklore. <strong>Crossplane</strong>
+    reconciles and composes, with heavier machinery and readiness-check ordering.
+    <strong>Custom operators</strong> do everything — at the price of owning Go controllers
+    forever. <strong>kro</strong> fills the specific gap between "Helm for packaging" and "full
+    operator": runtime reconciliation, auto-inferred ordering, CEL-defined status and
+    conditionals (<span class="mono accent">includeWhen</span>), zero Go. It composes naturally
+    with GitOps — RGDs are just resources, so ArgoCD applies platform definitions while app teams
+    commit eight-line instances in their own repos. It would slot directly into the
+    <a href="gitops-at-fleet-scale.html">inventory-driven GitOps</a> model as the abstraction
+    layer above the addon fleet.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the honest maturity assessment</h2>
+    <p>kro is <strong>experimental</strong> (v0.9.2 at the time of the talk), and I said so on
+    stage: APIs aren't solidified, it's not an EKS managed addon, and Graph Revisions — the answer
+    to "what happens to existing instances when an RGD schema changes?" — is still landing.
+    Schema evolution is exactly where my <a href="gitops-at-fleet-scale.html">inventory-schema-debt</a>
+    scars itch: once hundreds of instances depend on an API's shape, changing it is a migration.
+    I wouldn't put kro under production workloads today.</p>
+    <p>What it's already excellent for: <strong>prototyping internal developer platform APIs</strong>.
+    The expensive part of platform design isn't the controller — it's discovering the right
+    abstraction. kro collapses that iteration loop from "write a controller, argue about it,
+    rewrite it" to "edit YAML, re-apply, demo it after lunch." Design with kro now; decide later
+    whether the graduated kro or a hardened operator carries it to production. The trajectory —
+    AWS Labs → kubernetes-sigs → CNCF SIG Cloud Provider in under two years — suggests betting on
+    the former.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>references</h2>
+    <p class="mono" style="font-size:13px; line-height:2.1">
+    → <a href="https://kro.run" target="_blank" rel="noopener">kro.run — documentation</a><br>
+    → <a href="https://github.com/kubernetes-sigs/kro" target="_blank" rel="noopener">kubernetes-sigs/kro — source</a><br>
+    → <a href="https://aws-controllers-k8s.github.io/community/" target="_blank" rel="noopener">AWS Controllers for Kubernetes (ACK)</a><br>
+    → <a href="https://cel.dev" target="_blank" rel="noopener">Common Expression Language</a><br>
+    → <a href="../assets/kro-presentation.pdf">the full deck from the Pod Weekly demo (pdf)</a></p>
+    <div class="tags" style="margin-top:18px">
+      <span class="tag k8">Kubernetes</span><span class="tag">kro</span><span class="tag cy">CEL</span>
+      <span class="tag cy">ACK</span><span class="tag am">Platform APIs</span><span class="tag am">Talk</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="k8lens-async-health.html">← prev: probe-native observability</a>
+    <a class="btn" href="gpu-optimization-stack.html">next: 4-layer GPU stack →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

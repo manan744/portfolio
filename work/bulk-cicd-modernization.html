@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bulk CI/CD Modernization — Manan Jain</title>
+<meta name="description" content="Case study: 500+ CI/CD pipelines upgraded in parallel — idempotent, ring-based, fully audited.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="Bulk CI/CD Modernization — Manan Jain">
+<meta property="og:description" content="Case study: 500+ CI/CD pipelines upgraded in parallel — idempotent, ring-based, fully audited.">
+<meta property="og:url" content="https://manan.info/work/bulk-cicd-modernization.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Bulk CI/CD Modernization — Manan Jain">
+<meta name="twitter:description" content="Case study: 500+ CI/CD pipelines upgraded in parallel — idempotent, ring-based, fully audited.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../work.html">work</a> / bulk-cicd-modernization</span>
+    <h1>500+ pipelines upgraded, zero tickets<span class="accent">_</span></h1>
+    <p class="lede">When a shared CI/CD product needs an upgrade, every team that consumed it has a
+    stale copy. This automation found every deployed pipeline stack across the fleet and brought
+    them all to the latest version — 500+ pipelines patched in parallel — safely, idempotently, and with a paper trail.</p>
+    <dl class="kv">
+      <dt>role</dt><dd>designer &amp; author</dd>
+      <dt>scale</dt><dd>500+ CI/CD pipelines · fleet-wide · multiple regions</dd>
+      <dt>stack</dt><dd>Python, boto3, AWS ServiceCatalog, CodePipeline, CloudFormation, STS</dd>
+    </dl>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="case-section reveal">
+    <h2>the problem</h2>
+    <p>CI/CD infrastructure was distributed to teams as ServiceCatalog products. That's great for
+    day one — and a versioning nightmare for day two. Each mandatory change (new security scanning
+    stage, IMDSv2 enforcement, runtime upgrades) meant asking hundreds of teams to update their
+    provisioned products. Most wouldn't. The fleet drifted.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the approach</h2>
+<pre class="ascii">
+ <span class="g">discover</span>            <span class="g">plan</span>                <span class="g">execute</span>             <span class="g">verify</span>
+ ┌─────────────┐    ┌─────────────────┐  ┌───────────────┐  ┌──────────────┐
+ │ enumerate   │───►│ diff provisioned│─►│ update product│─►│ pipeline runs│
+ │ provisioned │    │ version vs      │  │ via Service-  │  │ green? stack │
+ │ products in │    │ latest artifact │  │ Catalog API   │  │ healthy?     │
+ │ every acct  │    │ <span class="a">skip if current</span> │  │ per account   │  │ <span class="a">→ CSV report</span> │
+ └─────────────┘    └─────────────────┘  └───────────────┘  └──────────────┘
+        ▲
+        <span class="c">STS assume-role per account · region-aware · resumable</span>
+</pre>
+    <p>The engine walks every account, finds provisioned CI/CD products, compares versions,
+    and updates only what's stale. Every action lands in a per-account CSV — who was upgraded,
+    who was skipped, who failed and why.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>engineering details</h2>
+    <p><strong>Idempotent by default.</strong> Re-running the tool is always safe: current stacks
+    are skipped, failed ones retried. Partial runs don't leave the fleet in an unknown state.</p>
+    <p><strong>ServiceCatalog as the control plane.</strong> Upgrades flow through the same
+    governed API teams used to provision — permissions, constraints, and history all stay intact.</p>
+    <p><strong>Batteries for the long tail.</strong> Companion scripts handle the odd cases:
+    security-group rule cleanup, IMDS enforcement on stray EC2, token generation for
+    multi-account API access, cross-account principal generation.</p>
+    <p><strong>Human-shaped rollout.</strong> Account cohorts (by CSV) let risky changes soak in a
+    small ring before fleet-wide execution.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>impact</h2>
+    <p>A change that would have been <strong>hundreds of tickets and a quarter of chasing</strong> became a
+    supervised run measured in hours. Compliance changes (scanning stages, IMDSv2) now reach 100%
+    of the fleet, provably, with an audit CSV to show for it.</p>
+    <div class="tags">
+      <span class="tag">Python</span><span class="tag cy">boto3</span><span class="tag cy">ServiceCatalog</span>
+      <span class="tag cy">CloudFormation</span><span class="tag am">Idempotency</span><span class="tag am">Audit trails</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="fleet-observability.html">← prev: fleet observability</a>
+    <a class="btn" href="onboarding-multitenancy.html">next: onboarding &amp; multi-tenancy →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

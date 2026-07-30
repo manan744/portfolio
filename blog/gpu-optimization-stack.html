@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The 4-Layer GPU Optimization Stack — Manan Jain</title>
+<meta name="description" content="Stop wasting 70–90% of your GPU capacity: hardware slicing with MIG + DRA, smart queuing with Kueue, provisioning with Karpenter + KEDA, and visibility with DCGM — from static GPUs to an elastic compute fabric.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="The 4-Layer GPU Optimization Stack">
+<meta property="og:description" content="Stop wasting 70–90% of your GPU capacity: MIG + DRA, Kueue, Karpenter + KEDA, DCGM — from static GPUs to elastic compute fabric.">
+<meta property="og:url" content="https://manan.info/blog/gpu-optimization-stack.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The 4-Layer GPU Optimization Stack">
+<meta name="twitter:description" content="MIG + DRA, Kueue, Karpenter + KEDA, DCGM — from static GPUs to elastic compute fabric.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../blog.html">blog</a> / gpu-optimization-stack</span>
+    <span class="eyebrow">gpu infrastructure · study · 8 min read</span>
+    <h1>The 4-layer GPU optimization stack<span class="accent">_</span></h1>
+    <p class="lede" style="margin-top:14px">Most organizations waste 70–90% of the GPU capacity
+    they pay for — because they treat GPUs like monolithic, indivisible blocks. This is my
+    breakdown of the winning stack for GPU orchestration on Kubernetes: four layers that turn
+    static GPUs into an elastic compute fabric.</p>
+    <div style="margin-top:22px">
+      <a class="btn" href="https://www.linkedin.com/posts/manan-jain-91616a184_aiinfrastructure-gpucomputing-kubernetes-activity-7447842845371088896-kBv1" target="_blank" rel="noopener">discuss on LinkedIn ↗</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap" style="max-width:840px">
+
+  <div class="case-section reveal">
+    <h2>the waste nobody budgets for</h2>
+    <p>We solved this exact problem for CPUs two decades ago — virtualization turned rigid servers
+    into fluid capacity, and nobody has thought about "which physical box" since. GPUs are at the
+    same turning point today, except the stakes are an order of magnitude higher: the wasted unit
+    isn't a $2,000 server, it's a five-figure accelerator sitting 80% idle while another team's
+    training job waits in a queue.</p>
+    <p>The failure isn't any single tool — it's treating utilization as one problem. It's four,
+    stacked: <strong>how you slice hardware, how you queue work, how you provision nodes, and how
+    you see what's actually happening.</strong> Each layer has a winning answer on Kubernetes
+    today.</p>
+
+    <svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:auto; margin:28px 0" role="img" aria-label="The 4-layer GPU optimization stack">
+      <style>
+        .gb { fill: rgba(17,24,39,.85); rx: 12; }
+        .gt { font: 600 16px "Space Grotesk", sans-serif; fill: #f4f7fb; }
+        .gm { font: 11.5px "JetBrains Mono", monospace; }
+        .gd { font: 12.5px "Inter", sans-serif; fill: #93a3ba; }
+        .arr { stroke: #4ade80; stroke-width: 2; fill: none; }
+      </style>
+      <!-- L1 -->
+      <rect class="gb" x="20" y="20" width="860" height="110" stroke="rgba(251,191,36,.45)"/>
+      <rect x="20" y="20" width="5" height="110" fill="#fbbf24"/>
+      <text class="gt" x="50" y="55">Layer 1 — Hardware Slicing</text>
+      <text class="gm" x="50" y="78" fill="#fbbf24">MIG + DRA · time-slicing</text>
+      <text class="gd" x="50" y="104">Dynamically partition GPUs into smaller, isolated instances — right when they're needed.</text>
+      <path class="arr" d="M 450 130 L 450 148" marker-end="none"/><path class="arr" d="M 443 141 L 450 150 L 457 141"/>
+      <!-- L2 -->
+      <rect class="gb" x="20" y="152" width="860" height="110" stroke="rgba(50,108,229,.5)"/>
+      <rect x="20" y="152" width="5" height="110" fill="#326ce5"/>
+      <text class="gt" x="50" y="187">Layer 2 — Smart Queuing</text>
+      <text class="gm" x="50" y="210" fill="#7aa5f8">Kueue · cohorts · gang scheduling</text>
+      <text class="gd" x="50" y="236">Batch AI workloads so jobs start whole — no deadlocks, no idle GPUs held hostage by pending pods.</text>
+      <path class="arr" d="M 450 262 L 450 280"/><path class="arr" d="M 443 273 L 450 282 L 457 273"/>
+      <!-- L3 -->
+      <rect class="gb" x="20" y="284" width="860" height="110" stroke="rgba(74,222,128,.45)"/>
+      <rect x="20" y="284" width="5" height="110" fill="#4ade80"/>
+      <text class="gt" x="50" y="319">Layer 3 — Provisioning</text>
+      <text class="gm" x="50" y="342" fill="#4ade80">Karpenter + KEDA · groupless · event-driven</text>
+      <text class="gd" x="50" y="368">Launch and bin-pack the most cost-effective GPU nodes from real demand — and only then.</text>
+      <path class="arr" d="M 450 394 L 450 412"/><path class="arr" d="M 443 405 L 450 414 L 457 405"/>
+      <!-- L4 -->
+      <rect class="gb" x="20" y="416" width="860" height="110" stroke="rgba(34,211,238,.45)"/>
+      <rect x="20" y="416" width="5" height="110" fill="#22d3ee"/>
+      <text class="gt" x="50" y="451">Layer 4 — Visibility &amp; Hygiene</text>
+      <text class="gm" x="50" y="474" fill="#22d3ee">DCGM + GPU reaper</text>
+      <text class="gd" x="50" y="500">Monitor real GPU health and power draw; hunt down "zombie" pods squatting on expensive silicon.</text>
+      <!-- footer line -->
+      <text class="gm" x="450" y="550" text-anchor="middle" fill="#5b6b84">static GPUs ──► elastic compute fabric</text>
+    </svg>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>layer 1 — hardware slicing: MIG + DRA</h2>
+    <p>The default Kubernetes contract — <span class="mono accent">nvidia.com/gpu: 1</span> —
+    hands a whole accelerator to a pod that may need a fifth of it. Two mechanisms break that
+    rigidity. <strong>Time-slicing</strong> is soft orchestration: multiple pods share a GPU with
+    no isolation — fine for bursty dev workloads, dangerous for anything latency-sensitive.
+    <strong>NVIDIA MIG</strong> (Multi-Instance GPU) is the real thing: hardware-level
+    partitioning of a single GPU into isolated instances with dedicated memory and compute
+    slices.</p>
+    <p>The piece that makes MIG operationally sane is <strong>Dynamic Resource Allocation
+    (DRA)</strong> — Kubernetes' newer resource model that treats devices as first-class,
+    parameterized, claimable resources instead of opaque integer counters. MIG + DRA means
+    partitions are created <em>when workloads claim them</em>, not pre-carved by an admin
+    guessing the demand mix in advance. That's the CPU-virtualization moment for GPUs: the
+    hardware stops dictating the workload shape.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>layer 2 — smart queuing: Kueue</h2>
+    <p>The default scheduler places <em>pods</em>; AI workloads are <em>jobs</em>. That mismatch
+    produces the classic distributed-training deadlock — and it's worth seeing concretely:</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">the deadlock, concretely</span><button class="code-copy">copy</button></div>
+<pre>Team A requests 8 GPUs for training  →  only 6 free  →  job PENDING
+Team B holds 4 GPUs                  →  idle, allocated, untouchable
+
+Result: 10 GPUs in the cluster doing nothing, both teams blocked.</pre></div>
+    <p><strong>Kueue</strong> fixes both halves. <strong>Gang admission</strong> means a job is
+    admitted only when its entire GPU quota can be satisfied — no partial starts squatting on
+    capacity they can't use. <strong>Cohorts</strong> mean Team B's idle quota is borrowable:
+    ClusterQueues in a cohort lend unused resources to each other and reclaim them when the owner
+    needs them back. Utilization stops being a per-team property and becomes a fleet property —
+    which is the entire point of running a shared platform.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>layer 3 — provisioning: Karpenter + KEDA</h2>
+    <p>Traditional node-group autoscalers make you pre-declare the shapes of capacity you might
+    want — which, for GPU fleets with heterogeneous workloads, means either sprawl or
+    starvation. <strong>Karpenter's groupless provisioning</strong> inverts it: look at the
+    pending pods, compute the cheapest viable node that satisfies them, launch exactly that,
+    bin-pack tightly. For the Spot-heavy version of this layer — diversity math, interruption
+    handling, consolidation tuned for GPUs — see the companion deep-dive,
+    <a href="spot-gpus-llm-inference.html">The Interruption-Native GPU Platform</a>.</p>
+    <p><strong>KEDA</strong> completes the loop for event-driven inference: scale <em>pods</em>
+    on external signals — queue length, Kafka lag, request depth — and let Karpenter chase the
+    pod demand with nodes. The chain is demand → pods → nodes, each link reactive. Nothing is
+    provisioned on a guess; everything is provisioned on a signal.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>layer 4 — visibility &amp; hygiene: DCGM + the reaper</h2>
+    <p>You can't fix what you can't see — and GPU waste is uniquely invisible, because a
+    "Running" pod holding a GPU looks identical to a working one from the orchestrator's view.
+    <strong>NVIDIA DCGM</strong> gives you the ground truth: per-GPU utilization, memory
+    pressure, power draw, thermals — exported to Prometheus, where a GPU drawing idle wattage
+    while allocated becomes a visible, alertable fact.</p>
+    <p>Then act on it: a <strong>GPU reaper</strong> — a policy job that hunts pods holding
+    accelerators with sustained near-zero utilization ("zombies": crashed notebooks, finished
+    experiments nobody cleaned up, hung training loops) and evicts them by policy. It's the
+    unglamorous layer, and in my experience the fastest payback: zombie hunting is free capacity
+    you already bought.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the bottom line</h2>
+    <p>Each layer compounds the others: slicing makes the units fit the work, queuing keeps the
+    units busy, provisioning keeps the units cheap, and visibility keeps everyone honest. The
+    destination is a mental-model shift — <strong>stop viewing clusters as rigid collections of
+    servers and start treating them as a fluid, elastic fabric of compute</strong>. That shift is
+    what separates experimental ML infrastructure from production-grade AI platforms; it's the
+    same philosophy that ran 500+ Spot GPUs at ~80% utilization in the
+    <a href="../work/gpu-llm-platform.html">inference platform case study</a>.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>references</h2>
+    <p class="mono" style="font-size:13px; line-height:2.1">
+    → <a href="https://docs.nvidia.com/datacenter/tesla/mig-user-guide/" target="_blank" rel="noopener">NVIDIA — MIG user guide</a><br>
+    → <a href="https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/" target="_blank" rel="noopener">Kubernetes — Dynamic Resource Allocation</a><br>
+    → <a href="https://kueue.sigs.k8s.io/docs/" target="_blank" rel="noopener">Kueue — batch admission, quotas &amp; cohorts</a><br>
+    → <a href="https://karpenter.sh/docs/" target="_blank" rel="noopener">Karpenter</a> · <a href="https://keda.sh/docs/" target="_blank" rel="noopener">KEDA</a><br>
+    → <a href="https://docs.nvidia.com/datacenter/dcgm/latest/" target="_blank" rel="noopener">NVIDIA DCGM</a><br>
+    → <a href="https://www.linkedin.com/posts/manan-jain-91616a184_aiinfrastructure-gpucomputing-kubernetes-activity-7447842845371088896-kBv1" target="_blank" rel="noopener">the original LinkedIn post — join the discussion</a></p>
+    <div class="tags" style="margin-top:18px">
+      <span class="tag k8">Kubernetes</span><span class="tag">GPU optimization</span><span class="tag cy">MIG · DRA</span>
+      <span class="tag cy">Kueue</span><span class="tag cy">Karpenter · KEDA</span><span class="tag am">FinOps</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="kro-resource-orchestrator.html">← prev: kro talk write-up</a>
+    <a class="btn" href="spot-gpus-llm-inference.html">next: interruption-native GPUs →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

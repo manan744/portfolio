@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ECS Multi-Service CI/CD Module — Manan Jain</title>
+<meta name="description" content="Case study: one Terraform module that provisions a complete ECS Fargate microservice platform — blue/green deploys, per-service pipelines.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="ECS Multi-Service CI/CD Module — Manan Jain">
+<meta property="og:description" content="Case study: one Terraform module that provisions a complete ECS Fargate microservice platform — blue/green deploys, per-service pipelines.">
+<meta property="og:url" content="https://manan.info/work/ecs-cicd-module.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="ECS Multi-Service CI/CD Module — Manan Jain">
+<meta name="twitter:description" content="Case study: one Terraform module that provisions a complete ECS Fargate microservice platform — blue/green deploys, per-service pipelines.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../work.html">work</a> / ecs-cicd-module</span>
+    <h1>One module, entire microservice platform<span class="accent">_</span></h1>
+    <p class="lede">A Terraform module that turns ~50 lines of configuration into a production-grade
+    ECS Fargate platform — load balancing, blue/green deployments, service discovery, and an
+    independent CI/CD pipeline for every microservice.</p>
+    <dl class="kv">
+      <dt>role</dt><dd>author &amp; maintainer</dd>
+      <dt>stack</dt><dd>Terraform, ECS Fargate, ALB, CodePipeline, CodeBuild, CodeDeploy, ECR, CloudFront, ACM, Secrets Manager</dd>
+      <dt>distribution</dt><dd>versioned module in a private Terraform registry (S3-backed)</dd>
+    </dl>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="case-section reveal">
+    <h2>the problem</h2>
+    <p>Every team deploying microservices on AWS was solving the same problems from scratch:
+    how to route traffic, how to deploy without downtime, how to wire a pipeline, how to
+    handle internal service-to-service calls. The result was a dozen slightly-different,
+    slightly-broken platforms — and weeks of lead time for every new service.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the design</h2>
+    <p>One shared ECS cluster, many services — each declared as a few lines in a map. The module
+    classifies every service into one of three shapes and builds the right infrastructure for each:</p>
+<pre class="ascii">
+                    ┌──────────────────────────────────────────────┐
+                    │                 AWS Account                  │
+                    │                                              │
+ Internet/CDN ─────►│  <span class="g">ALB (external)</span>                              │
+                    │   ├── /            ──► ui     <span class="a">[blue/green]</span>   │
+                    │   ├── api.domain   ──► api    <span class="a">[host routing]</span> │
+                    │   └── /admin/*     ──► admin  <span class="a">[path routing]</span> │
+                    │                                              │
+                    │  <span class="c">Service Discovery (*.local)</span>                 │
+                    │   ├── ds.ns.local     ──► ds     <span class="a">[rolling +</span>  │
+                    │   └── worker.ns.local ──► worker  <span class="a">circuit-brk]</span>│
+                    │                                              │
+                    │  <span class="c">CI-only</span> (task def, no service)              │
+                    │   └── data-processor ──► ad-hoc run-task     │
+                    │                                              │
+                    │  Shared ECR ◄── CodePipeline (per service)   │
+                    │                  └── CodeBuild ─► CodeDeploy │
+                    └──────────────────────────────────────────────┘
+</pre>
+    <p><strong>External services</strong> get ALB listeners with host- or path-based routing and
+    CodeDeploy blue/green — zero-downtime by construction.
+    <strong>Internal services</strong> get Cloud Map service discovery and rolling deploys with a
+    deployment circuit breaker that auto-rolls-back bad releases.
+    <strong>CI-only services</strong> get a pipeline and task definition without a running service —
+    for batch and ad-hoc workloads.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>engineering details</h2>
+    <p><strong>One pipeline per microservice.</strong> Every service deploys independently — no
+    lock-step releases, no shared blast radius. A shared ECR repository with service-scoped image
+    tags keeps registry sprawl down.</p>
+    <p><strong>Templated task definitions.</strong> Container definitions, appspec, and buildspec
+    render from templates, including a security-scanning variant (Wiz) that inserts image scanning
+    into the build without teams changing anything.</p>
+    <p><strong>Batteries included, swappable.</strong> Sub-modules for CloudFront (with Lambda@Edge),
+    ACM certificates, Secrets Manager wiring, and synthetic monitoring (Uptrends) — each optional.</p>
+    <p><strong>Roadmapped like a product.</strong> Canary traffic shifting, sidecar injection
+    (OTEL/Envoy/Datadog), and map-based secrets are tracked on a public roadmap — because an
+    internal module is a product with users.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>from the code</h2>
+    <p>The heart of the module is one <span class="mono accent">aws_ecs_service</span> resource that
+    shape-shifts per service via <span class="mono accent">for_each</span> and dynamic blocks —
+    external services get an ALB target group, internal ones get Cloud Map service discovery,
+    from the same resource (naming sanitized):</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">hcl · services.tf (excerpt)</span><button class="code-copy">copy</button></div>
+<pre><span class="c-kw">resource</span> <span class="c-str">"aws_ecs_service"</span> <span class="c-str">"service"</span> {
+  <span class="c-kw">for_each</span> = local.deployed_services      <span class="c-com"># one map drives everything</span>
+
+  name            = <span class="c-str">"aws-${var.account_alias}-…-service-${each.key}"</span>
+  launch_type     = <span class="c-str">"FARGATE"</span>
+  task_definition = aws_ecs_task_definition.task[each.key].arn
+
+  <span class="c-com"># ALB wiring only exists for external services</span>
+  <span class="c-kw">dynamic</span> <span class="c-str">"load_balancer"</span> {
+    <span class="c-kw">for_each</span> = each.value.service_type == <span class="c-str">"external"</span> ? [<span class="c-g">1</span>] : []
+    <span class="c-kw">content</span> {
+      target_group_arn = aws_lb_target_group.blue[each.key].arn
+      container_port   = each.value.container_port
+    }
+  }
+
+  <span class="c-com"># internal services register in Cloud Map instead</span>
+  <span class="c-kw">dynamic</span> <span class="c-str">"service_registries"</span> {
+    <span class="c-kw">for_each</span> = each.value.service_type == <span class="c-str">"internal"</span> ? [<span class="c-g">1</span>] : []
+    <span class="c-kw">content</span> { registry_arn = aws_service_discovery_service.sd[each.key].arn }
+  }
+}</pre></div>
+    <p>Routing intent lives in data, not resources: <span class="mono accent">routing_type</span>
+    (host vs path), per-service domains, and the default-service fallback all resolve inside
+    locals — so adding a microservice is adding a map entry, never copying a resource block.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>impact</h2>
+    <p>New microservice platforms went from <strong>weeks of bespoke Terraform to under an hour</strong>
+    of writing a service map. Deployments are zero-downtime by default, rollbacks are automatic,
+    and every team runs on the same audited, versioned foundation.</p>
+    <div class="tags">
+      <span class="tag">Terraform</span><span class="tag">HCL</span><span class="tag cy">ECS Fargate</span>
+      <span class="tag cy">CodeDeploy Blue/Green</span><span class="tag cy">ALB</span><span class="tag cy">Cloud Map</span>
+      <span class="tag am">Platform as a product</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="../work.html">← all work</a>
+    <a class="btn" href="eks-fleet-upgrades.html">next: EKS fleet upgrades →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A Doctrine for Kubernetes Fleet Upgrades — Manan Jain</title>
+<meta name="description" content="Rings, phases, proofs: a doctrine for upgrading Kubernetes fleets, built on EKS lifecycle economics, pre-flight insights, idempotent orchestration, and verification as the definition of done.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="A Doctrine for Kubernetes Fleet Upgrades">
+<meta property="og:description" content="Rings, phases, proofs — upgrading 150+ EKS clusters as a control problem, not a project.">
+<meta property="og:url" content="https://manan.info/blog/upgrading-150-eks-clusters.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="A Doctrine for Kubernetes Fleet Upgrades">
+<meta name="twitter:description" content="Rings, phases, proofs — fleet upgrades as a control problem.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../blog.html">blog</a> / upgrading-150-eks-clusters</span>
+    <span class="eyebrow">fleet operations · architecture deep-dive · 11 min read</span>
+    <h1>A doctrine for Kubernetes fleet upgrades: rings, phases, proofs<span class="accent">_</span></h1>
+    <p class="lede" style="margin-top:14px">Upgrading one cluster is a task. Upgrading 150+ is a
+    control problem — and it deserves a doctrine, not a longer runbook. This is the one I built
+    and operated at fleet scale.</p>
+  </div>
+</header>
+
+<div class="wrap" style="max-width:840px">
+
+  <div class="case-section reveal">
+    <h2>the clock you don't control</h2>
+    <p>The forcing function is contractual, not technical. EKS gives each Kubernetes minor version
+    a 26-month lifecycle — 14 months of standard support, then 12 of <em>paid</em> extended
+    support at a premium that compounds per cluster. Fall off the end and AWS force-upgrades your
+    control plane on its schedule, not yours. Kubernetes itself ships three minors a year, and
+    upgrades are strictly sequential: 1.30 → 1.33 means three complete upgrade campaigns, no
+    skipping.</p>
+    <p>Run the arithmetic at fleet scale: 150 clusters × one careful engineer-day per manual
+    upgrade × three minors a year is <strong>more upgrade-days than a platform team has days</strong>.
+    Hire more people and the fleet grows faster than the team. The only stable solution changes
+    the unit of work: not "an engineer upgrades a cluster" but <strong>"an orchestrator upgrades
+    the fleet; engineers supervise rings."</strong></p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the doctrine in one diagram</h2>
+<pre class="ascii">
+ <span class="c">pre-flight</span>      upgrade insights · deprecated-API scan · addon
+     │           compatibility matrix · <span class="a">dry-run across the fleet</span>
+     ▼
+ <span class="g">ring 0</span>          sandbox clusters — burn-in, days
+     ▼
+ <span class="g">ring 1</span>          dev/qa — wide coverage, real workloads, low blast
+     ▼
+ <span class="g">ring 2</span>          prod, cohorted — bounded concurrency per cohort
+     │
+     │   per cluster, strictly ordered phases:
+     │   <span class="c">control plane → node groups → addons → verification</span>
+     ▼
+ <span class="a">artifact</span>        machine-readable result per cluster per phase —
+                 the fleet's upgrade state is a queryable dataset
+</pre>
+    <p>Two axes matter and they're orthogonal. <strong>Rings</strong> bound correlated risk — a
+    bad interaction between a Kubernetes minor and your CNI version should be discovered on ring
+    0's five clusters, not ring 2's hundred. <strong>Phases</strong> encode the dependency order
+    that Kubernetes itself imposes: control plane before kubelets (version skew policy), kubelets
+    before addon versions that assume them, and verification before "done" gets said out loud.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>pre-flight: upgrades fail before they start</h2>
+    <p>Most upgrade damage is discoverable in advance. The pre-flight stage aggregates, per
+    cluster: EKS <strong>upgrade insights</strong> (the control plane's own report of deprecated
+    API usage against the target version), the addon compatibility matrix for vpc-cni / CoreDNS /
+    kube-proxy, and a fleet-wide <span class="mono accent">--dry-run</span> that renders exactly
+    what would change. The output is a go/no-go list — clusters with blocking findings get tickets
+    <em>before</em> the campaign, not incidents during it. Fleet tooling without a dry run isn't
+    automation; it's a loaded weapon with a nicer grip.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the orchestrator's three obligations</h2>
+    <p><strong>1. Idempotency — the run you can always re-run.</strong> Version comparison decides
+    skip-vs-act per cluster; a partial failure resumes exactly where it stopped. The deeper case:
+    a re-run may find a cluster <em>mid-upgrade</em> from the previous attempt. The orchestrator
+    attaches to the in-flight update and waits, rather than failing:</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">python · the resumability contract</span><button class="code-copy">copy</button></div>
+<pre><span class="c-com"># if mid-upgrade from a previous run — attach, don't fail</span>
+<span class="c-kw">if</span> cluster_status == <span class="c-str">"UPDATING"</span>:
+    wait_for_cluster_active(eks, cluster_name, target_version, cp_timeout)
+
+<span class="c-com"># semantic version compare decides skip-vs-upgrade</span>
+<span class="c-kw">if not</span> version_lt(current_version, target_version):
+    write_result({<span class="c-str">"cluster"</span>: name, <span class="c-str">"status"</span>: <span class="c-str">"SKIPPED"</span>, <span class="c-str">"reason"</span>: <span class="c-str">"already current"</span>})
+    <span class="c-kw">return</span></pre></div>
+    <p><strong>2. Correct waiting — async APIs lie briefly.</strong>
+    <span class="mono accent">update_cluster_version</span> returns immediately, and for a window
+    afterward the cluster still reports <span class="mono accent">ACTIVE</span> at the old
+    version. A naive "wait for ACTIVE" poller declares victory before the upgrade begins. The fix
+    is a <strong>two-phase waiter</strong> — first wait to <em>leave</em> ACTIVE, then wait to
+    return at the target version:</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">python · upgrade_control_plane.py</span><button class="code-copy">copy</button></div>
+<pre>seen_non_active = <span class="c-kw">False</span>
+<span class="c-kw">while</span> time.time() - start &lt; timeout:
+    status, ver = describe(cluster)
+    <span class="c-kw">if</span> status != <span class="c-str">"ACTIVE"</span>:
+        seen_non_active = <span class="c-kw">True</span>          <span class="c-com"># phase 1: it actually started</span>
+    <span class="c-kw">if</span> status == <span class="c-str">"ACTIVE"</span> <span class="c-kw">and</span> seen_non_active <span class="c-kw">and</span> ver == target_version:
+        <span class="c-kw">return</span> <span class="c-kw">True</span>                    <span class="c-com"># phase 2: done, provably</span>
+    <span class="c-kw">if</span> status == <span class="c-str">"FAILED"</span>:
+        <span class="c-kw">raise</span> RuntimeError(...)</pre></div>
+    <p>This is a general lesson about cloud control planes, not an EKS quirk: <strong>every async
+    mutation needs a waiter that distinguishes "hasn't started" from "finished."</strong></p>
+    <p><strong>3. Bounded concurrency — parallel, with a queue.</strong> A
+    <span class="mono accent">ThreadPoolExecutor</span> caps in-flight upgrades per cohort;
+    <span class="mono accent">as_completed</span> harvests results as they land. One slow cluster
+    doesn't stall the ring; one failed cluster becomes a row in the report, not a dead campaign.
+    The cap is a risk dial you turn per ring — wide for dev, narrow for prod.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>verification is the definition of done</h2>
+    <p>"The API said the upgrade succeeded" and "the cluster works" are different propositions,
+    and the gap between them is where fleet campaigns quietly rot. The final phase is a
+    post-upgrade validation framework — native Kubernetes client, not kubectl parsing — asserting
+    node readiness, workload health, addon versions, and CRD integrity, pass/fail per check,
+    machine-readable. An upgrade is done when validation proves the cluster still does its job.
+    Nothing else counts.</p>
+    <p>The artifact this produces is the doctrine's quiet superpower: the fleet's upgrade state
+    becomes a <em>dataset</em>. "Are we exposed to the extended-support fee next quarter?" is a
+    query, not a meeting.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the transferable pattern</h2>
+    <p>Nothing above is Kubernetes-specific. <strong>Pre-flight, rings, ordered phases, idempotent
+    execution, correct waiting, bounded concurrency, verification, artifacts</strong> — that
+    eight-step shape turns any scary fleet mutation into a supervised batch job. The same skeleton
+    ran our 500-pipeline CI/CD modernization and a fleet-wide security-agent rollout. Build it
+    once, and every subsequent campaign is configuration.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>references</h2>
+    <p class="mono" style="font-size:13px; line-height:2.1">
+    → <a href="https://docs.aws.amazon.com/eks/latest/best-practices/cluster-upgrades.html" target="_blank" rel="noopener">EKS Best Practices — cluster upgrades</a><br>
+    → <a href="https://docs.aws.amazon.com/eks/latest/userguide/update-cluster.html" target="_blank" rel="noopener">EKS — updating cluster Kubernetes versions</a><br>
+    → <a href="https://kubernetes.io/releases/version-skew-policy/" target="_blank" rel="noopener">Kubernetes — version skew policy</a></p>
+    <div class="tags" style="margin-top:18px">
+      <span class="tag k8">EKS</span><span class="tag cy">Python</span><span class="tag cy">boto3</span>
+      <span class="tag am">Idempotency</span><span class="tag am">Fleet ops</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="spot-gpus-llm-inference.html">← prev: interruption-native GPUs</a>
+    <a class="btn" href="gitops-at-fleet-scale.html">next: inventory-driven GitOps →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

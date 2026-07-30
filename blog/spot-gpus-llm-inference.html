@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Interruption-Native GPU Platform — Manan Jain</title>
+<meta name="description" content="A four-layer reference architecture for running LLM inference on Spot GPUs: capacity acquisition, GPU-aware scheduling, the workload contract, and utilization as a control loop.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="The Interruption-Native GPU Platform">
+<meta property="og:description" content="A four-layer reference architecture for LLM inference on Spot GPUs — from capacity acquisition to utilization as a control loop.">
+<meta property="og:url" content="https://manan.info/blog/spot-gpus-llm-inference.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="The Interruption-Native GPU Platform">
+<meta name="twitter:description" content="A four-layer reference architecture for LLM inference on Spot GPUs.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../blog.html">blog</a> / spot-gpus-llm-inference</span>
+    <span class="eyebrow">gpu infrastructure · architecture deep-dive · 10 min read</span>
+    <h1>The Interruption-Native GPU Platform: LLM inference on Spot at scale<span class="accent">_</span></h1>
+    <p class="lede" style="margin-top:14px">A reference architecture for running large-scale LLM
+    batch inference on interruptible capacity — distilled from operating 500+ Spot GPUs at ~80%
+    utilization and ~60% below on-demand cost.</p>
+  </div>
+</header>
+
+<div class="wrap" style="max-width:840px">
+
+  <div class="case-section reveal">
+    <h2>the economics that force the architecture</h2>
+    <p>GPU compute inverts the usual cloud cost model: with CPUs, engineering time dominates and
+    infrastructure efficiency is a rounding error. With GPU fleets at inference scale, the
+    infrastructure line <em>is</em> the P&amp;L. Spot pricing offers up to ~90% discounts on that
+    line — in exchange for a two-minute reclaim notice on any node, at any moment.</p>
+    <p>Most teams evaluate that trade as a reliability question and reject it. That's a category
+    error. The correct framing is architectural: <strong>can you build a system in which
+    interruption is a scheduled event rather than a failure?</strong> If yes, the discount is
+    structural and permanent. If no, no amount of Spot "best effort" will save you — you'll pay
+    the discount back in re-run compute and engineer attention.</p>
+    <p>What follows is the four-layer architecture that makes the answer yes.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>layer 1 — capacity acquisition: buy the market, not an instance</h2>
+    <p>Every (instance type × availability zone) pair is an <em>independent Spot capacity pool</em>
+    with its own supply curve and interruption behavior. A NodePool restricted to one GPU type in
+    one AZ is a bet on a single volatile market. Diversification isn't a nice-to-have; Karpenter's
+    own Spot-to-Spot consolidation refuses to operate without meaningful instance-type diversity
+    (the documented guidance is 15+ types) precisely because narrow pools concentrate interruption
+    risk on whatever is scarcest.</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">yaml · karpenter NodePool — the acquisition policy</span><button class="code-copy">copy</button></div>
+<pre><span class="c-kw">kind</span>: NodePool
+<span class="c-kw">spec</span>:
+  <span class="c-kw">template</span>:
+    <span class="c-kw">spec</span>:
+      <span class="c-kw">requirements</span>:
+        - { <span class="c-kw">key</span>: <span class="c-str">karpenter.sh/capacity-type</span>, <span class="c-kw">operator</span>: In, <span class="c-kw">values</span>: [<span class="c-g">spot</span>] }
+        - { <span class="c-kw">key</span>: <span class="c-str">node.kubernetes.io/instance-type</span>, <span class="c-kw">operator</span>: In,
+            <span class="c-kw">values</span>: [<span class="c-g">g5.xlarge … p4d.24xlarge</span>] }   <span class="c-com"># wide: many pools</span>
+        - { <span class="c-kw">key</span>: <span class="c-str">topology.kubernetes.io/zone</span>, <span class="c-kw">operator</span>: In,
+            <span class="c-kw">values</span>: [<span class="c-g">us-east-1a, 1b, 1c</span>] }          <span class="c-com"># every AZ = more pools</span>
+      <span class="c-kw">taints</span>:
+        - { <span class="c-kw">key</span>: <span class="c-str">nvidia.com/gpu</span>, <span class="c-kw">effect</span>: NoSchedule }  <span class="c-com"># GPU metal is for GPU work</span></pre></div>
+    <p>The subtlety most write-ups miss: <strong>consolidation policy on GPUs is a different
+    problem than on CPUs.</strong> Karpenter's utilization-driven consolidation assumes pod
+    resource usage is a meaningful signal; on GPU nodes it mostly isn't — a GPU can be 100% busy
+    while the pod's CPU/memory look idle. For inference fleets the working configuration is
+    empty-node consolidation with a deliberate <span class="mono accent">consolidateAfter</span>
+    delay, plus <span class="mono accent">karpenter.sh/do-not-disrupt</span> on batch pods that
+    must not be voluntarily moved mid-run. You want Karpenter aggressive about <em>empty</em>
+    nodes and conservative about <em>working</em> ones.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>layer 2 — scheduling: fragmentation is the silent tax</h2>
+    <p>At 500-GPU scale, the scheduler's job is fighting two entropies. <strong>Fragmentation:</strong>
+    an 8-GPU node running a 1-GPU pod has 7 GPUs you're paying for and can't sell to an 8-GPU job —
+    bin-packing keeps multi-GPU capacity coherent. <strong>Correlation:</strong> if a job class
+    lands entirely in one Spot pool, one reclaim wave kills the whole class — topology spread
+    constraints across pools turn a correlated failure into a partial one.</p>
+    <p>These pull in opposite directions (packing concentrates; spreading dilutes), which is why
+    they must be policy, not defaults: pack <em>within</em> a node, spread <em>across</em> pools.
+    Getting this wrong doesn't page anyone — it just quietly costs 15–20 points of utilization,
+    which at GPU prices is a headcount.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>layer 3 — the workload contract</h2>
+    <p>Infrastructure alone can't make interruption free; the workload has to hold up its end.
+    The contract has three clauses, and they're checkable in review:</p>
+    <p><strong>Progress is durable.</strong> Batch inference checkpoints its cursor externally —
+    finished shards are never recomputed. The unit of loss on interruption is one in-flight shard,
+    not one job.</p>
+    <p><strong>Shutdown is graceful.</strong> The two-minute reclaim notice is an event you
+    subscribe to, not trivia: drain, flush the current shard, requeue the remainder. Kubernetes
+    gives you the machinery (termination grace, preStop); the platform's job is making the default
+    path correct so forty teams don't reimplement it badly.</p>
+    <p><strong>Retry is idempotent.</strong> Re-running a shard must be safe. If a job can't
+    tolerate its own retry, it can't run on Spot — and honestly, it's one bad deploy away from
+    incident on on-demand too.</p>
+    <p>The compounding effect is what matters: once retries are cheap, interruption stops being a
+    reliability event at all. It becomes a scheduling event — and layer 1 already handles
+    scheduling.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>layer 4 — utilization as a control loop, not a dashboard</h2>
+    <p>The metric that governs the platform isn't availability — batch inference doesn't have
+    users refreshing a page — it's <strong>sustained GPU utilization</strong>. DCGM exporter feeds
+    per-GPU utilization into Prometheus; the platform's SLO is a utilization floor, alerted and
+    defended like uptime elsewhere. This closes the loop with every layer above: utilization
+    dropping means fragmentation (layer 2), over-provisioned acquisition (layer 1), or workloads
+    idling on checkpoint I/O (layer 3). One number, and its failure modes point at their owning
+    layer.</p>
+    <p>Result, held over time rather than in a benchmark week: <strong>~80% sustained utilization
+    across 500+ GPUs at ~60% below the on-demand bill.</strong></p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>anti-patterns worth naming</h2>
+    <p><strong>The "reliable Spot" fallacy</strong> — hand-picking the "least interrupted"
+    instance type. Interruption rates are non-stationary; yesterday's calm pool is tomorrow's
+    squeeze. Diversity beats prediction.</p>
+    <p><strong>Checkpointing to local disk</strong> — durable progress on an ephemeral node is
+    not durable progress.</p>
+    <p><strong>Disabling consolidation entirely</strong> — panic response to one bad disruption.
+    You keep the fragmentation tax forever to avoid a problem that
+    <span class="mono accent">do-not-disrupt</span> annotations solve surgically.</p>
+    <p><strong>Utilization dashboards without an SLO</strong> — a graph nobody defends decays
+    into wallpaper. If 80% is the target, page below it.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>references</h2>
+    <p class="mono" style="font-size:13px; line-height:2.1">
+    → <a href="https://docs.aws.amazon.com/eks/latest/best-practices/aiml-compute.html" target="_blank" rel="noopener">EKS Best Practices — AI/ML compute &amp; autoscaling</a><br>
+    → <a href="https://aws.amazon.com/blogs/compute/applying-spot-to-spot-consolidation-best-practices-with-karpenter/" target="_blank" rel="noopener">AWS — Spot-to-Spot consolidation with Karpenter</a><br>
+    → <a href="https://karpenter.sh/docs/" target="_blank" rel="noopener">Karpenter documentation — NodePools &amp; disruption</a><br>
+    → <a href="https://docs.aws.amazon.com/eks/latest/best-practices/karpenter.html" target="_blank" rel="noopener">EKS Best Practices — Karpenter</a></p>
+    <div class="tags" style="margin-top:18px">
+      <span class="tag k8">EKS</span><span class="tag">GPU infrastructure</span><span class="tag cy">Karpenter</span>
+      <span class="tag cy">DCGM/Prometheus</span><span class="tag am">Spot orchestration</span><span class="tag am">FinOps</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="gpu-optimization-stack.html">← prev: 4-layer GPU stack</a>
+    <a class="btn" href="upgrading-150-eks-clusters.html">next: fleet upgrade doctrine →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

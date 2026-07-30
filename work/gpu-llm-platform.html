@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPU/LLM Inference Platform — Manan Jain</title>
+<meta name="description" content="Case study: a Kubernetes LLM inference platform on 500+ Spot GPUs — ~80% utilization, ~60% compute cost reduction, built on EKS and Karpenter.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="GPU/LLM Inference Platform — Manan Jain">
+<meta property="og:description" content="Case study: a Kubernetes LLM inference platform on 500+ Spot GPUs — ~80% utilization, ~60% compute cost reduction, built on EKS and Karpenter.">
+<meta property="og:url" content="https://manan.info/work/gpu-llm-platform.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="GPU/LLM Inference Platform — Manan Jain">
+<meta name="twitter:description" content="Case study: a Kubernetes LLM inference platform on 500+ Spot GPUs — ~80% utilization, ~60% compute cost reduction, built on EKS and Karpenter.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../work.html">work</a> / gpu-llm-platform</span>
+    <h1>An LLM inference platform on 500+ Spot GPUs<span class="accent">_</span></h1>
+    <p class="lede">AI workloads want thousands of GPUs; finance wants them cheap; Spot instances want
+    to disappear mid-job. This Kubernetes platform reconciles all three — sustaining ~80% GPU
+    utilization on interruptible capacity while cutting compute cost by ~60%.</p>
+    <dl class="kv">
+      <dt>role</dt><dd>platform architect</dd>
+      <dt>scale</dt><dd>500+ GPUs · Spot-backed · large-scale LLM batch inference</dd>
+      <dt>results</dt><dd>~80% GPU utilization · ~60% compute cost reduction</dd>
+      <dt>stack</dt><dd>Amazon EKS, Karpenter, Kubernetes scheduling, DCGM exporter, Prometheus/Grafana</dd>
+    </dl>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="case-section reveal">
+    <h2>the problem</h2>
+    <p>LLM inference at batch scale is a scheduling problem wearing a GPU costume. On-demand GPU
+    capacity is ruinously expensive; Spot capacity is ~70% cheaper but can be reclaimed with two
+    minutes' notice. Naïve setups either burn money on idle on-demand GPUs or watch long-running
+    batch jobs die to interruptions and start over.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the approach</h2>
+<pre class="ascii">
+ <span class="g">batch queue</span> ──► <span class="g">K8s scheduler + custom policies</span>
+                    │  bin-packing, GPU-aware placement,
+                    │  topology spread across Spot pools
+                    ▼
+ <span class="c">Karpenter</span> ──► provisions cheapest viable Spot GPU capacity
+                    │  diversified instance types &amp; AZs
+                    ▼
+ <span class="g">fault-tolerance layer</span>
+   ├── checkpointing &amp; retry strategies for interrupted work
+   ├── graceful drain on 2-min Spot reclaim notice
+   └── requeue without losing progress
+                    ▼
+ <span class="c">DCGM ► Prometheus ► Grafana</span> — utilization is a first-class SLO
+</pre>
+    <p>The core insight: treat <strong>interruption as a normal event, not a failure</strong>. Once retry
+    and checkpointing are cheap, Spot's discount is nearly free money — and utilization, not
+    availability, becomes the metric to optimize.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>engineering details</h2>
+    <p><strong>Scheduling policies tuned for GPUs.</strong> Bin-packing keeps fragmentation down so
+    500+ GPUs act like a coherent pool instead of stranded singles; spread constraints keep any
+    one Spot pool reclaim from taking out a whole job class.</p>
+    <p><strong>Karpenter for elasticity.</strong> Node capacity follows the queue — diversified across
+    instance types and AZs so no single Spot market squeeze stalls the platform.</p>
+    <p><strong>Utilization as an SLO.</strong> DCGM metrics flow into Prometheus/Grafana; ~80%
+    sustained utilization is monitored and defended like uptime would be elsewhere.</p>
+    <p><strong>Batch-first fault tolerance.</strong> Retry strategies and interruption handling mean
+    large inference batches complete despite churn underneath them.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>from the platform config</h2>
+    <p>Two artifacts carry most of the platform's behavior — the Karpenter NodePool that buys the
+    Spot market wide, and the job template that makes interruption survivable (representative
+    shapes, values simplified):</p>
+    <div class="code"><div class="code-bar"><span class="code-lang">yaml · karpenter NodePool — diversified acquisition</span><button class="code-copy">copy</button></div>
+<pre><span class="c-kw">kind</span>: NodePool
+<span class="c-kw">spec</span>:
+  <span class="c-kw">template</span>:
+    <span class="c-kw">spec</span>:
+      <span class="c-kw">requirements</span>:
+        - { <span class="c-kw">key</span>: <span class="c-str">karpenter.sh/capacity-type</span>, <span class="c-kw">operator</span>: In, <span class="c-kw">values</span>: [<span class="c-g">spot</span>] }
+        - { <span class="c-kw">key</span>: <span class="c-str">node.kubernetes.io/instance-type</span>, <span class="c-kw">operator</span>: In,
+            <span class="c-kw">values</span>: [<span class="c-g">g5.xlarge … p4d.24xlarge</span>] }    <span class="c-com"># wide list = many Spot pools</span>
+        - { <span class="c-kw">key</span>: <span class="c-str">topology.kubernetes.io/zone</span>, <span class="c-kw">operator</span>: In,
+            <span class="c-kw">values</span>: [<span class="c-g">us-east-1a, 1b, 1c</span>] }
+      <span class="c-kw">taints</span>:
+        - { <span class="c-kw">key</span>: <span class="c-str">nvidia.com/gpu</span>, <span class="c-kw">effect</span>: NoSchedule }
+  <span class="c-kw">disruption</span>:
+    <span class="c-kw">consolidationPolicy</span>: WhenEmptyOrUnderutilized    <span class="c-com"># fight fragmentation</span></pre></div>
+    <div class="code"><div class="code-bar"><span class="code-lang">yaml · batch job — the interruption contract</span><button class="code-copy">copy</button></div>
+<pre><span class="c-kw">kind</span>: Job
+<span class="c-kw">spec</span>:
+  <span class="c-kw">backoffLimit</span>: <span class="c-g">6</span>                       <span class="c-com"># retries are the plan, not the exception</span>
+  <span class="c-kw">template</span>:
+    <span class="c-kw">metadata</span>:
+      <span class="c-kw">annotations</span>:
+        <span class="c-kw">karpenter.sh/do-not-disrupt</span>: <span class="c-str">"true"</span>   <span class="c-com"># no voluntary moves mid-batch</span>
+    <span class="c-kw">spec</span>:
+      <span class="c-kw">terminationGracePeriodSeconds</span>: <span class="c-g">110</span>    <span class="c-com"># inside the 2-min Spot notice</span>
+      <span class="c-kw">containers</span>:
+        - <span class="c-kw">env</span>:
+            - { <span class="c-kw">name</span>: <span class="c-str">CHECKPOINT_URI</span>, <span class="c-kw">value</span>: <span class="c-g">s3://…/cursor</span> }  <span class="c-com"># durable progress</span>
+          <span class="c-kw">lifecycle</span>:
+            <span class="c-kw">preStop</span>: { <span class="c-kw">exec</span>: { <span class="c-kw">command</span>: [<span class="c-str">"flush-and-requeue"</span>] } }</pre></div>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>impact</h2>
+    <p><strong>~60% compute cost reduction</strong> at <strong>~80% sustained GPU utilization</strong> —
+    on the most expensive resource class in the cloud, at 500+ GPU scale, while AI teams ship
+    without thinking about capacity at all.</p>
+    <p>Why ~60% when Spot discounts run 70–90%? Deliberately: the delta pays for checkpointing
+    overhead, requeue time after reclaims, and diversified instance selection that sometimes picks
+    a pricier pool for availability. The discount you keep is the one that survives real
+    workloads — a headline number that ignores those costs is a benchmark, not a platform.</p>
+    <div class="tags">
+      <span class="tag k8">EKS</span><span class="tag">GPU infrastructure</span><span class="tag cy">Karpenter</span>
+      <span class="tag cy">Spot orchestration</span><span class="tag am">LLM inference</span><span class="tag am">FinOps</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="../work.html">← all work</a>
+    <a class="btn" href="ecs-cicd-module.html">next: ECS platform module →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blog — Manan Jain</title>
+<meta name="description" content="Field notes from fleet-scale infrastructure — Kubernetes, GPUs, GitOps, and platform engineering, by Manan Jain.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="Blog — Manan Jain">
+<meta property="og:description" content="Field notes from fleet-scale infrastructure — Kubernetes, GPUs, GitOps, and platform engineering, by Manan Jain.">
+<meta property="og:url" content="https://manan.info/blog.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Blog — Manan Jain">
+<meta name="twitter:description" content="Field notes from fleet-scale infrastructure — Kubernetes, GPUs, GitOps, and platform engineering, by Manan Jain.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="index.html">~</a> / blog</span>
+    <span class="eyebrow">$ tail -f /var/log/manan/thoughts.log</span>
+    <h1>Field notes from fleet scale<span class="accent">_</span></h1>
+    <p class="lede">Deep-dives and talk write-ups from running 150+ Kubernetes clusters, 500+ GPUs, and
+    the platforms on top of them — written down so you don't have to learn it the hard way.</p>
+  </div>
+</header>
+
+<section class="section" style="padding-top:16px">
+  <div class="wrap">
+    <div class="grid grid-2">
+
+      <a class="card reveal" href="blog/kro-resource-orchestrator.html" style="border-color:rgba(50,108,229,.35)">
+        <span class="arrow">↗</span>
+        <span class="file">platform engineering · talk write-up · 11 min read</span>
+        <h3>kro: custom Kubernetes APIs without writing a controller</h3>
+        <p>From my Pod Weekly live EKS demo: ResourceGraphDefinitions turn YAML + CEL into a CRD
+        plus micro-controller at runtime, the dependency DAG is inferred rather than declared,
+        and kro + ACK puts cloud and cluster in one reconciliation loop. With deck.</p>
+        <div class="tags"><span class="tag k8">Kubernetes</span><span class="tag">kro</span><span class="tag cy">CEL</span><span class="tag am">Talk</span></div>
+      </a>
+
+      <a class="card reveal d1" href="blog/gpu-optimization-stack.html">
+        <span class="arrow">↗</span>
+        <span class="file">gpu infrastructure · study · 8 min read</span>
+        <h3>The 4-Layer GPU Optimization Stack</h3>
+        <p>Stop wasting 70–90% of your GPU capacity. Hardware slicing with MIG + DRA, smart
+        queuing with Kueue cohorts, groupless provisioning with Karpenter + KEDA, and a GPU
+        reaper for zombie pods — from static GPUs to an elastic compute fabric.</p>
+        <div class="tags"><span class="tag k8">Kubernetes</span><span class="tag">MIG · DRA</span><span class="tag cy">Kueue</span><span class="tag am">FinOps</span></div>
+      </a>
+
+      <a class="card reveal" href="blog/spot-gpus-llm-inference.html">
+        <span class="arrow">↗</span>
+        <span class="file">gpu infrastructure · deep-dive · 10 min read</span>
+        <h3>The Interruption-Native GPU Platform</h3>
+        <p>A four-layer reference architecture for LLM inference on Spot: capacity acquisition as
+        market-buying, GPU-aware scheduling vs the fragmentation tax, the workload contract, and
+        utilization as a control loop. With the anti-patterns named.</p>
+        <div class="tags"><span class="tag k8">EKS</span><span class="tag cy">Karpenter</span><span class="tag am">FinOps</span></div>
+      </a>
+
+      <a class="card reveal d1" href="blog/upgrading-150-eks-clusters.html">
+        <span class="arrow">↗</span>
+        <span class="file">fleet operations · deep-dive · 11 min read</span>
+        <h3>A Doctrine for Kubernetes Fleet Upgrades</h3>
+        <p>Rings bound risk, phases encode dependency order, verification defines done. EKS
+        lifecycle economics, the two-phase waiter every async control plane needs, and the
+        eight-step shape that turns any fleet mutation into a batch job.</p>
+        <div class="tags"><span class="tag k8">EKS</span><span class="tag cy">Python</span><span class="tag am">Fleet ops</span></div>
+      </a>
+
+      <a class="card reveal" href="blog/gitops-at-fleet-scale.html">
+        <span class="arrow">↗</span>
+        <span class="file">gitops · deep-dive · 10 min read</span>
+        <h3>Inventory-Driven GitOps: the fleet as a directory tree</h3>
+        <p>Fleet GitOps is a data-modeling problem: the (cluster × addon × version) matrix has to
+        live somewhere. ApplicationSets, multi-source composition, controller sharding math, and
+        the failure modes — sync storms, schema debt, the kubectl escape hatch.</p>
+        <div class="tags"><span class="tag k8">ArgoCD</span><span class="tag cy">Helm</span><span class="tag am">GitOps</span></div>
+      </a>
+
+
+      <a class="card reveal" href="blog/building-k8s-ai-agent.html">
+        <span class="arrow">↗</span>
+        <span class="file">ai × infrastructure · deep-dive · 12 min read</span>
+        <h3>The Grounded Agent: an architecture for LLMs that operate infrastructure</h3>
+        <p>Why "chatbot with kubectl" fails, and the subsystems that fix it: ReAct with a
+        structural critique gate, context engineering that cuts tokens 10×, Langfuse-gated
+        evaluation, and a write path that's a security architecture, not a feature flag.</p>
+        <div class="tags"><span class="tag k8">Kubernetes</span><span class="tag">LLM agents</span><span class="tag cy">MCP</span></div>
+      </a>
+
+      <a class="card reveal d1" href="blog/k8lens-async-health.html">
+        <span class="arrow">↗</span>
+        <span class="file">observability · deep-dive · 9 min read</span>
+        <h3>Probe-Native Observability: measuring what Kubernetes can't tell you</h3>
+        <p>Orchestrator state and user experience are different facts. Where you probe from
+        changes what you measure, the prober's failure model, cardinality as the second bill,
+        and wiring probes into SLO burn rates.</p>
+        <div class="tags"><span class="tag cy">asyncio</span><span class="tag cy">aiohttp</span><span class="tag am">Prometheus</span></div>
+      </a>
+
+      <div class="card reveal d1" style="border-style:dashed; opacity:.85">
+        <span class="file">next up</span>
+        <h3>More posts shipping soon</h3>
+        <p>Drafts in the queue: Karpenter bin-packing for GPU workloads and ArgoCD notifications at 100+ project scale. Follow on
+        <a href="https://www.linkedin.com/in/manan-jain-91616a184/" target="_blank" rel="noopener">LinkedIn</a> for new posts.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<script src="assets/main.js"></script>
+</body>
+</html>

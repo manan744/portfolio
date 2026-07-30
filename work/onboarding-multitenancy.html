@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Self-Service Onboarding &amp; Multi-Tenancy — Manan Jain</title>
+<meta name="description" content="Case study: self-service onboarding — REST API + React UI generating Terraform and Git PRs automatically.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="Self-Service Onboarding &amp; Multi-Tenancy — Manan Jain">
+<meta property="og:description" content="Case study: self-service onboarding — REST API + React UI generating Terraform and Git PRs automatically.">
+<meta property="og:url" content="https://manan.info/work/onboarding-multitenancy.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Self-Service Onboarding &amp; Multi-Tenancy — Manan Jain">
+<meta name="twitter:description" content="Case study: self-service onboarding — REST API + React UI generating Terraform and Git PRs automatically.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../work.html">work</a> / onboarding-multitenancy</span>
+    <h1>Self-service onboarding &amp; multi-tenancy<span class="accent">_</span></h1>
+    <p class="lede">The best platform is one teams can join without talking to you. This project is a
+    REST API + React UI that takes a team from "we need infrastructure" to fully onboarded —
+    generating Terraform, automating Git, and notifying stakeholders along the way.</p>
+    <dl class="kv">
+      <dt>role</dt><dd>full-stack author</dd>
+      <dt>stack</dt><dd>Node.js, React (Vite), Terraform generation, Git automation, email orchestration</dd>
+      <dt>plus</dt><dd>containerized multi-tenant app patterns (Node/Express + Python/Flask, Docker, nginx)</dd>
+    </dl>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="case-section reveal">
+    <h2>the problem</h2>
+    <p>Onboarding a team onto the platform was a checklist in someone's head: create the config,
+    write the Terraform, open the Git PRs, set the permissions, email the right people. Every
+    onboarding consumed platform-engineer hours and every skipped step surfaced weeks later as
+    a mystery bug.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the approach</h2>
+<pre class="ascii">
+ <span class="c">React UI (Vite)</span>
+      │  team fills a form — accounts, services, environments
+      ▼
+ <span class="g">Node.js REST API</span>
+      ├── validates request against platform rules
+      ├── <span class="g">generates Terraform</span> from templates
+      ├── <span class="g">automates Git</span> — branch, commit, PR
+      └── <span class="g">notifies</span> — owners, approvers, requester
+      ▼
+ platform repo PR ──► review ──► merge ──► pipeline provisions
+</pre>
+    <p>The human steps that remain are the ones that should be human: review and approval.
+    Everything mechanical — file generation, naming conventions, branch hygiene, notifications —
+    is code.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>multi-tenancy patterns</h2>
+    <p>Alongside onboarding, reference implementations for running multiple tenants on shared
+    infrastructure: containerized Node and Flask services behind nginx, packaged with Docker and
+    designed to slot into the ECS platform module — so "we need a new tenant" is configuration,
+    not a new architecture discussion.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>engineering details</h2>
+    <p><strong>Templates over snowflakes.</strong> Generated Terraform is always convention-correct —
+    names, tags, and structure identical across hundreds of onboardings.</p>
+    <p><strong>Git as the interface.</strong> The API's output is a pull request, not a side-channel
+    change — keeping platform history reviewable and revertible.</p>
+    <p><strong>Notifications built-in.</strong> Every state change emails the right audience, killing
+    the "did my request go through?" ping-pong.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>impact</h2>
+    <p>Onboarding went from platform-engineer hours per team to a <strong>form and a PR review</strong>.
+    Consistency stopped depending on who did the onboarding, and the platform team got their
+    calendar back.</p>
+    <div class="tags">
+      <span class="tag">Node.js</span><span class="tag cy">React</span><span class="tag cy">Terraform</span>
+      <span class="tag cy">Docker</span><span class="tag am">Self-service</span><span class="tag am">Developer experience</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="bulk-cicd-modernization.html">← prev: bulk CI/CD modernization</a>
+    <a class="btn" href="k8s-agent.html">next: k8sAgent →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

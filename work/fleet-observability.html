@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fleet Health &amp; Observability — Manan Jain</title>
+<meta name="description" content="Case study: async fleet health monitoring — thousands of endpoint checks, Prometheus metrics, post-change validation.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="Fleet Health &amp; Observability — Manan Jain">
+<meta property="og:description" content="Case study: async fleet health monitoring — thousands of endpoint checks, Prometheus metrics, post-change validation.">
+<meta property="og:url" content="https://manan.info/work/fleet-observability.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Fleet Health &amp; Observability — Manan Jain">
+<meta name="twitter:description" content="Case study: async fleet health monitoring — thousands of endpoint checks, Prometheus metrics, post-change validation.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="../index.html">~</a> / <a href="../work.html">work</a> / fleet-observability</span>
+    <h1>Health checks for thousands of services<span class="accent">_</span></h1>
+    <p class="lede">You can't operate what you can't see. This is a suite of tools that answers,
+    on demand and at fleet scale: which clusters are unhealthy, which services are down,
+    and what changed — before users or pagers find out.</p>
+    <dl class="kv">
+      <dt>role</dt><dd>author</dd>
+      <dt>scale</dt><dd>hundreds of clusters, thousands of service endpoints per run</dd>
+      <dt>stack</dt><dd>Python asyncio + aiohttp, Kubernetes Python client, Prometheus, ThreadPoolExecutor</dd>
+    </dl>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="case-section reveal">
+    <h2>the problem</h2>
+    <p>With hundreds of clusters across hundreds of accounts, "is everything okay?" was
+    unanswerable. Dashboards existed per cluster, but nothing swept the whole fleet and
+    produced a single, actionable answer. Incidents were discovered by users; post-upgrade
+    regressions were discovered late.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>the toolkit</h2>
+<pre class="ascii">
+ <span class="g">cluster-health</span>     sweeps every cluster in every account concurrently
+                    → node conditions, workload status, control-plane health
+                    → aggregated CSV: <span class="a">cluster, issue, severity, action</span>
+
+ <span class="g">k8lens</span>             async endpoint prober for 1000s of services
+                    → aiohttp fan-out, bounded concurrency
+                    → Prometheus metrics for trending, hardened deployment
+
+ <span class="g">sanity-check</span>       post-change validation framework
+                    → nodes, workloads, addons, CRDs after any upgrade
+                    → pass/fail per check, machine-readable output
+</pre>
+    <p>Each tool works standalone; together they cover the three questions that matter:
+    <strong>steady-state health</strong> (cluster-health), <strong>user-facing availability</strong>
+    (k8lens), and <strong>did-my-change-break-anything</strong> (sanity-check).</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>engineering details</h2>
+    <p><strong>Async where it counts.</strong> Endpoint probing uses asyncio + aiohttp with bounded
+    concurrency — thousands of HTTP checks complete in the time a sequential script would spend on
+    dozens.</p>
+    <p><strong>Native Kubernetes client, not shelling out.</strong> Structured API responses instead of
+    parsing kubectl text means checks are precise and version-proof.</p>
+    <p><strong>Reports built for action.</strong> Output is aggregated, deduplicated, and severity-ranked
+    CSV/HTML — designed to be triaged in minutes, not scrolled for hours.</p>
+    <p><strong>Metrics as a first-class output.</strong> k8lens exports Prometheus metrics, so one-off
+    checks double as a continuous monitoring source with alerting and history.</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>impact</h2>
+    <p>"Is the fleet healthy?" became a <strong>ten-minute question with a definitive answer</strong>.
+    Post-upgrade regressions surface immediately in sanity reports, and endpoint trends live in
+    Prometheus instead of someone's memory.</p>
+    <div class="tags">
+      <span class="tag">Python asyncio</span><span class="tag cy">aiohttp</span><span class="tag cy">Prometheus</span>
+      <span class="tag cy">Kubernetes API</span><span class="tag am">Fleet monitoring</span>
+    </div>
+  </div>
+
+  <div class="case-nav">
+    <a class="btn" href="gitops-addon-platform.html">← prev: GitOps addon platform</a>
+    <a class="btn" href="bulk-cicd-modernization.html">next: bulk CI/CD modernization →</a>
+  </div>
+</div>
+
+<script src="../assets/main.js"></script>
+</body>
+</html>

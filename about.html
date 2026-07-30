@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About — Manan Jain</title>
+<meta name="description" content="About Manan Jain — Senior Platform &amp; Cloud Engineer specializing in fleet-scale AWS and Kubernetes automation.">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Manan Jain">
+<meta property="og:title" content="About — Manan Jain">
+<meta property="og:description" content="About Manan Jain — Senior Platform &amp; Cloud Engineer specializing in fleet-scale AWS and Kubernetes automation.">
+<meta property="og:url" content="https://manan.info/about.html">
+<meta property="og:image" content="https://manan.info/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="About — Manan Jain">
+<meta name="twitter:description" content="About Manan Jain — Senior Platform &amp; Cloud Engineer specializing in fleet-scale AWS and Kubernetes automation.">
+<meta name="twitter:image" content="https://manan.info/assets/og-card.png">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="aurora"><div class="orb"></div></div>
+
+
+<header class="case-header">
+  <div class="wrap">
+    <span class="crumb"><a href="index.html">~</a> / about</span>
+    <div style="display:grid; grid-template-columns: 1fr auto; gap:40px; align-items:center">
+      <div>
+        <span class="eyebrow">$ kubectl describe engineer manan</span>
+        <h1>Infrastructure that runs itself<span class="accent">_</span></h1>
+        <p class="lede">I'm Manan — a Senior Platform &amp; Cloud Engineer who believes the best infrastructure
+        work is invisible: things upgrade themselves, deploys don't page anyone, and new teams
+        onboard without a meeting.</p>
+      </div>
+      <div class="portrait" style="width:min(190px,40vw)">
+        <div class="frame">
+          <img src="assets/photo.jpg" alt="Manan Jain" width="1254" height="1254"
+               onerror="this.style.display='none';document.getElementById('avatar-fallback').style.display='flex'">
+          <div class="avatar-fallback" id="avatar-fallback" style="display:none">
+            <span class="initials" style="font-size:52px">MJ</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="case-section reveal">
+    <h2>the short version</h2>
+    <p>I've worked where cloud infrastructure meets scale. Not "we have three environments" scale —
+    <strong>150+ EKS clusters, ~1,000 nodes, 30K+ running pods, 500+ GPUs</strong> scale, where anything done
+    by hand is already broken and every solution has to be a system.</p>
+    <p>My work splits into three layers: <strong>platforms</strong> teams build on (Terraform modules,
+    GitOps addon delivery, self-service onboarding), <strong>fleet operations</strong> that keep those
+    platforms current (cluster upgrades, bulk pipeline modernization), and <strong>observability</strong>
+    that proves it all works (health sweeps, async service probing, post-change validation).</p>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>what I optimize for</h2>
+    <div class="grid grid-2" style="margin-top:22px">
+      <div class="card">
+        <h3>Leverage</h3>
+        <p>A fix applied to one cluster is a patch; applied to five hundred, it's a product.
+        I build the second kind.</p>
+      </div>
+      <div class="card">
+        <h3>Safety at speed</h3>
+        <p>Blue/green by default, circuit-breaker rollbacks, idempotent tooling, ringed rollouts.
+        Moving fast is a consequence of being safe.</p>
+      </div>
+      <div class="card">
+        <h3>Paper trails</h3>
+        <p>Every fleet operation I ship produces an audit artifact. If it isn't in a report,
+        it didn't happen.</p>
+      </div>
+      <div class="card">
+        <h3>Self-service</h3>
+        <p>The measure of a platform team is how rarely people need to talk to it.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>toolbox</h2>
+    <dl class="kv">
+      <dt>languages</dt><dd>Python (boto3, asyncio, Kubernetes client) · Terraform/HCL · JavaScript/Node · Bash · PowerShell</dd>
+      <dt>aws</dt><dd>EKS · ECS Fargate · CodePipeline/CodeBuild/CodeDeploy · ServiceCatalog · CloudFormation · IAM/STS · ALB · CloudFront · Lambda · Secrets Manager · ECR</dd>
+      <dt>kubernetes</dt><dd>ArgoCD · ApplicationSets · Helm · Flyte · operators · RBAC · addon lifecycle · multi-cluster patterns</dd>
+      <dt>practices</dt><dd>GitOps · blue/green &amp; canary · IaC module design · cross-account automation · observability (Prometheus, Grafana, Splunk OTEL) · CI/CD (also TeamCity, Bitbucket)</dd>
+    </dl>
+  </div>
+
+  <div class="case-section reveal">
+    <h2>what I've gotten good at</h2>
+    <p><strong>Turning toil into products.</strong> Recurring infrastructure work becomes platforms —
+    the kind of investment that shows up as faster teams and quieter pagers.</p>
+    <p><strong>Fleet-scale operations.</strong> Upgrade orchestration, GitOps addon delivery, reusable
+    deployment modules — built them, operated them, know where the bodies are buried.</p>
+    <p><strong>Foundations that survive 10x.</strong> Multi-account AWS, CI/CD, and Kubernetes
+    architectures designed so growth doesn't mean a rewrite.</p>
+    <p><strong>Migrations and modernization.</strong> Monolith-to-microservices on ECS/EKS,
+    console-clicks to Terraform, hand-deploys to blue/green pipelines — home turf.</p>
+  </div>
+
+  <!-- ================= CONTACT ================= -->
+  <div class="case-section reveal" id="contact">
+    <h2>contact</h2>
+    <div class="term" style="max-width:680px; margin-top:20px">
+      <div class="term-bar">
+        <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+        <span class="term-title">contact — zsh</span>
+      </div>
+      <div class="term-body">
+        <div class="prompt-line"><span class="p">manan@prod-cluster</span><span class="faint">:</span><span class="path">~</span><span class="faint">$</span> cat contact.txt</div>
+        <div class="out">email    : <a href="mailto:jainmanan1804@gmail.com">jainmanan1804@gmail.com</a>
+linkedin : <a href="https://www.linkedin.com/in/manan-jain-91616a184/" target="_blank" rel="noopener">linkedin.com/in/manan-jain-91616a184</a>
+status   : heads-down @ Aivar Innovation — not job hunting
+open to  : talking shop · collaborations · interesting problems
+response : fast. automation frees up a lot of calendar.</div>
+        <div class="prompt-line" style="margin-top:8px"><span class="p">manan@prod-cluster</span><span class="faint">:</span><span class="path">~</span><span class="faint">$</span> <span class="cursor"></span></div>
+      </div>
+    </div>
+    <div style="margin-top:28px; display:flex; gap:14px; flex-wrap:wrap">
+      <a class="btn solid" href="mailto:jainmanan1804@gmail.com">send email →</a>
+      <a class="btn" href="https://www.linkedin.com/in/manan-jain-91616a184/" target="_blank" rel="noopener">connect on LinkedIn</a>
+    </div>
+  </div>
+
+  <div style="padding-bottom:50px"></div>
+</div>
+
+<script src="assets/main.js"></script>
+</body>
+</html>
