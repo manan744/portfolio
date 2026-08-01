@@ -284,6 +284,7 @@ const SITE = {
     { t: "✎ blog — field notes", d: "7 posts from fleet scale", u: P + "blog.html" },
     { t: "◆ ventures — builder mindset", d: "GlassMic · AI Smart Insole", u: P + "ventures.html" },
     { t: "≡ resume", d: "career rollout history · download CV", u: P + "resume.html" },
+    { t: "🏅 certifications", d: "Claude Architect · Platform Engineering", u: P + "resume.html#certifications" },
     { t: "● about", d: "story · toolbox · expertise", u: P + "about.html" },
     { t: "✉ contact", d: "email + linkedin", u: P + "about.html#contact" },
     { t: "⚡ GPU/LLM inference platform", d: "500+ spot GPUs · ~60% cost cut", u: P + "work/gpu-llm-platform.html" },
