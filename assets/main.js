@@ -221,7 +221,7 @@ const SITE = {
       "  terraform apply      → make it official",
       "  uptime | clear | sudo",
     ].join("\n"),
-    whoami: "manan jain — senior platform & cloud engineer.\nI've run large-scale kubernetes on AWS — 150+ EKS clusters,\n~1,000 nodes, 30K+ pods, 40+ teams — and built an LLM\ninference platform on 500+ spot GPUs.\nnow: agent observability & guardrails @ zs.",
+    whoami: "manan jain — applied ai & platform engineer.\nI've run large-scale kubernetes on AWS — 150+ EKS clusters,\n~1,000 nodes, 30K+ pods, 40+ teams — and built an LLM\ninference platform on 500+ spot GPUs.\nnow: agent observability & guardrails @ zs.",
     work: "featured work → ./work.html\n\n  [0] LLM inference platform on 500+ GPUs (~60% cheaper)\n  [1] terraform ECS multi-service CI/CD module\n  [2] EKS fleet upgrade orchestrator (150+ clusters)\n  [3] GitOps addon platform on ArgoCD (120+ apps)\n  [4] fleet health & observability (2,500+ endpoints)\n  [5] bulk CI/CD modernization (500+ pipelines)\n  [6] self-service onboarding & multi-tenancy\n  [7] k8sAgent — AI agent that speaks kubectl\n  [8] k8lens — in-cluster health radar",
     blog: "field notes → ./blog.html\n\n  [1] kro — custom k8s APIs without controllers (talk)\n  [2] the 4-layer GPU optimization stack\n  [3] the interruption-native GPU platform\n  [4] a doctrine for kubernetes fleet upgrades\n  [5] inventory-driven gitops\n  [6] the grounded agent — LLMs that operate infra\n  [7] probe-native observability",
     ventures: "the builder mindset → ./ventures.html\n\n  GlassMic        modernizing decorative & packaging glass mfg\n  AI Smart Insole iPhone TrueDepth scan → custom insole platform",
